@@ -75,6 +75,7 @@ def test_docs_list_foundation_and_analytics_routes(client):
         "/api/sites/{slug}/gsc/queries",
         "/api/sites/{slug}/ga4/pages",
         "/api/sites/{slug}/status",
+        "/api/sites/{slug}/report/latest",
     }
 
 

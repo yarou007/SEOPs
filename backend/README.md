@@ -338,7 +338,7 @@ and fake-mode activation. Run `pytest` to include all GA4, GSC, and auth tests.
 
 ## Read API
 
-All six read endpoints require the existing session cookie and use
+All read endpoints require the existing session cookie and use
 `get_site_for_user`: unauthenticated requests return 401; an unlinked or missing
 site returns the same 404. Responses have `Cache-Control: no-store`.
 The prefix is `/api/sites/{slug}`:
@@ -351,6 +351,7 @@ The prefix is `/api/sites/{slug}`:
 | GET | `/gsc/queries?start&end&device` | `query`, clicks, impressions, CTR, weighted average position, `top_page`. |
 | GET | `/ga4/pages?start&end` | `page_path`, sessions, total users, conversions, weighted engagement rate. |
 | GET | `/status` | `gsc` and `ga4` sync-log records, or `null` for a missing log. |
+| GET | `/report/latest` | Latest dated stored report JSON for this site. Returns 404 if no report exists. |
 
 `start` and `end` are inclusive ISO dates. The default end is today in
 `SYNC_TIMEZONE` minus `SYNC_LAG_DAYS`; the default start is end minus 27 days.
@@ -413,6 +414,12 @@ in `SYNC_TIMEZONE`**, while the data window ends at run date minus `SYNC_LAG_DAY
 Rerunning on the same date replaces that date's files. Default generated reports
 are ignored by Git. `--all` includes active sites and continues after site failures;
 it exits 1 if any site failed, otherwise 0. Explicit `--site` can select an inactive site.
+
+The frontend reads the saved JSON through `GET /api/sites/{slug}/report/latest`.
+It uses the same site-access dependency, selects the newest valid date filename,
+and never runs analysis or sync as part of a request. Missing reports return 404;
+unreadable, invalid, or mismatched stored JSON returns a generic 503. Symlinks
+outside the site's report directory are ignored. Existing read/sync behavior is unchanged.
 
 The report includes the site and all four inclusive windows:
 

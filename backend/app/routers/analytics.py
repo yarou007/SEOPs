@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 from typing import Annotated, Literal
 
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 
 from app import metrics
 from app.access import AccessibleSite
+from app.config import get_settings
 from app.db import DbSession
 
 router = APIRouter(prefix="/api/sites/{slug}", tags=["analytics"])
@@ -146,3 +148,29 @@ def ga4_pages(
 @router.get("/status", response_model=SourceStatus)
 def status(site: AccessibleSite, db: DbSession) -> dict:
     return metrics.sync_status(db, site.domain)
+
+
+@router.get("/report/latest", response_model=dict)
+def latest_report(site: AccessibleSite) -> dict:
+    root = get_settings().reports_dir.resolve()
+    directory = (root / site.slug).resolve()
+    missing = HTTPException(status_code=404, detail="Weekly report not found")
+    if directory.parent != root or not directory.is_dir():
+        raise missing
+    candidates = []
+    for path in directory.glob("????-??-??.json"):
+        try:
+            date.fromisoformat(path.stem)
+        except ValueError:
+            continue
+        if path.resolve().parent == directory:
+            candidates.append(path)
+    if not candidates:
+        raise missing
+    try:
+        report = json.loads(max(candidates, key=lambda path: path.stem).read_text(encoding="utf-8"))
+        if not isinstance(report, dict) or report.get("site", {}).get("slug") != site.slug:
+            raise ValueError("Report site mismatch")
+    except (OSError, ValueError, AttributeError):
+        raise HTTPException(status_code=503, detail="Stored weekly report is unavailable") from None
+    return report
