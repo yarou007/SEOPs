@@ -1,7 +1,7 @@
 # SEOPs backend foundation
 
 Python 3.12, FastAPI, SQLAlchemy 2, Pydantic 2, PostgreSQL 16, and Alembic.
-This backend provides database tables, authentication, site authorization, and GSC/GA4 sync.
+This backend provides authentication, site-scoped read APIs, GSC/GA4 sync, and weekly analysis.
 All backend commands below run from `backend/`.
 
 ## Local setup
@@ -78,9 +78,9 @@ without an `Origin` header are supported.
 
 `get_site_for_user(slug)` / `AccessibleSite` in `app/access.py` checks the current
 user's membership or admin role and returns the same 404 for missing and unlinked
-sites. Future site-specific handlers must use this dependency. No site detail
-handler is shipped in this step; tests mount a private route to verify direct-URL
-authorization. Admins can access all sites even without `user_sites` links. Access
+sites. All site-specific read handlers use this dependency. Tests also mount a
+private route to verify the dependency independently. Admins can access all sites
+even without `user_sites` links. Access
 does not currently filter on `active`; it follows membership and role.
 
 ### Session storage decision
@@ -336,9 +336,147 @@ upsert updates, independent resume checkpoints, chunk and page rollback/recovery
 incomplete reports, missing properties, retries, credential fallback, CLI isolation,
 and fake-mode activation. Run `pytest` to include all GA4, GSC, and auth tests.
 
+## Read API
+
+All six read endpoints require the existing session cookie and use
+`get_site_for_user`: unauthenticated requests return 401; an unlinked or missing
+site returns the same 404. Responses have `Cache-Control: no-store`.
+The prefix is `/api/sites/{slug}`:
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/summary?start&end` | `current_window`, `previous_window`, and `current`/`previous` source totals. |
+| GET | `/timeseries?start&end` | One row per day with `data_date`, `gsc_clicks`, `gsc_impressions`, `ga4_sessions`, `ga4_users`. |
+| GET | `/gsc/pages?start&end&device` | `page`, clicks, impressions, CTR, and weighted average position. |
+| GET | `/gsc/queries?start&end&device` | `query`, clicks, impressions, CTR, weighted average position, `top_page`. |
+| GET | `/ga4/pages?start&end` | `page_path`, sessions, total users, conversions, weighted engagement rate. |
+| GET | `/status` | `gsc` and `ga4` sync-log records, or `null` for a missing log. |
+
+`start` and `end` are inclusive ISO dates. The default end is today in
+`SYNC_TIMEZONE` minus `SYNC_LAG_DAYS`; the default start is end minus 27 days.
+This is a 28-day window. Summary compares it to the immediately preceding window
+of equal inclusive length. For example:
+
+```text
+GET /api/sites/arlington/summary?start=2026-10-01&end=2026-10-07
+GET /api/sites/arlington/gsc/pages?start=2026-10-01&end=2026-10-07&device=MOBILE&limit=25&offset=0
+```
+
+Ranges over 16 **calendar** months, inverted ranges, and invalid dates return 422.
+The oldest allowed start is end minus 16 months, clamped to the last day of a shorter
+month. Device accepts exactly `MOBILE`, `DESKTOP`, or `TABLET`; omit it for all devices.
+The three table endpoints support `limit` (1–1000, default 100) and nonnegative `offset`.
+GSC tables sort by impressions descending, breaking ties by page/query alphabetically.
+GA4 has no impression metric, so its pages sort by sessions descending, then path.
+A query's top page is the page with most impressions for that query in the same
+window and device filter; ties use clicks descending, then page alphabetically.
+Blank query strings are omitted from query tables.
+
+`summary.current` and `.previous` each contain `gsc` and `ga4`:
+
+```json
+{
+  "gsc": {"clicks": 20, "impressions": 800, "ctr": 0.025, "avg_position": 8.25},
+  "ga4": {"sessions": 45, "total_users": 32, "conversions": 4}
+}
+```
+
+A source is `null` if no rows exist for it in that window. Existing rows with zero
+traffic remain zero. Timeseries also preserves this distinction: missing source/day
+values are `null`, while present zero rows return 0. Empty table results are `[]`.
+CTR is `SUM(clicks) / SUM(impressions)`, never an average of stored CTRs. Position
+is `SUM(position * impressions) / SUM(impressions)`. Both are `null` when total
+impressions are zero. GA4 engagement rate is session-weighted and is `null` when
+total sessions are zero. Counts are integers; ratios are rounded to four decimal
+places and positions to two, only when presenting results. Analysis uses unrounded
+Decimal values for comparisons. SQL aggregation is shared in `app/metrics.py`.
+
+The source tables impose two limits on interpretation: stored GSC rows contain
+query dimensions, so page aggregates cannot reconstruct hidden-query traffic;
+GA4 total users are summed daily/page counts, not unique people deduplicated across
+the whole window. The weekly report includes both limitations in its data notes.
+
+## Weekly analysis
+
+The CLI reads only local PostgreSQL tables. It makes no Google calls and does not
+run a sync. It writes the same report data as JSON and short Markdown, without charts:
+
+```sh
+python -m app.analysis weekly --site arlington
+python -m app.analysis weekly --all
+```
+
+Set `REPORTS_DIR` in `.env` or the environment (default `reports/`, relative to the
+working directory). Files are written to
+`<REPORTS_DIR>/<slug>/<report-date>.json` and `.md`. The filename uses the **run date
+in `SYNC_TIMEZONE`**, while the data window ends at run date minus `SYNC_LAG_DAYS`.
+Rerunning on the same date replaces that date's files. Default generated reports
+are ignored by Git. `--all` includes active sites and continues after site failures;
+it exits 1 if any site failed, otherwise 0. Explicit `--site` can select an inactive site.
+
+The report includes the site and all four inclusive windows:
+
+- `current`: 28 days ending at the configured lagged end date.
+- `previous`: the 28 days immediately before `current`.
+- `last7`: the last seven days of `current`.
+- `prev7`: the seven days immediately before `last7`.
+
+All tunable cutoffs, limits, position bands, and tie priorities live in
+`ANALYSIS_THRESHOLDS` in `app/analysis/weekly.py`:
+
+| Check | Threshold | Reason |
+| --- | --- | --- |
+| Low CTR | Current page impressions ≥ 200 and CTR < 50% of its band's median page CTR | high impressions, CTR below band median |
+| Mobile gap | Each device has ≥ 100 impressions; mobile CTR < 70% of desktop CTR | mobile CTR gap |
+| Query opportunity | Current query impressions ≥ 50 and weighted position 8–20 inclusive | position 8–20, close to page 1 |
+| Weekly clicks | Previous seven days clicks ≥ 20 and last seven days clicks < 60% of them | clicks down X% week over week |
+| Zero clicks | Current impressions ≥ 100 and clicks = 0 | 100+ impressions, no clicks |
+| 28-day trend | Previous 28 days clicks ≥ 20 and current clicks down **more than** 30% | clicks down X% vs previous 28 days |
+
+Position bands use fractional, half-open intervals `[1,4)`, `[4,8)`, `[8,11)`,
+`[11,21)`, and `[21,∞)`, labeled 1–3, 4–7, 8–10, 11–20, 21+. Thus 3.9 is in 1–3
+and 4.0 is in 4–7. Median CTR includes all current pages with positive impressions
+and a known position in that band, including the page being assessed. Unknown
+positions are excluded from the band comparison. A page without both eligible
+mobile and desktop data is skipped for the mobile-gap check; zero desktop CTR
+cannot produce a gap flag.
+
+Each flagged page is kept once. For low CTR, zero clicks, and the 28-day trend,
+`impressions_lost = max(0, impressions × (band_median_ctr − page_ctr))`; a missing
+benchmark yields 0. This is the requested field name for an estimated click
+opportunity, not a literal count of missing impressions. Other checks use 0 for
+this ranking value. The strongest flag is the one with the highest estimate; ties
+prefer zero clicks, 28-day trend, weekly clicks, low CTR, then mobile gap. Unique
+pages rank by estimate descending, then impressions descending, then URL. The
+report shows at most **3** pages and always shows the full unique flagged-page count.
+Query candidates are separate from that page count, with at most **10**, ordered
+by impressions and carrying their top page.
+
+If the current GSC source is entirely missing, no click-drop claims are made.
+Within an available current source, a page absent from a comparison window counts
+as zero clicks, so a disappearing page can still be flagged. Missing positions
+can still yield zero-click or trend flags, with an opportunity estimate of 0.
+
+Reports include current/previous source totals, MOBILE/DESKTOP clicks, impressions,
+CTR and position, sync-log status, query candidates, and data notes. Sync is stale
+when `(today − last_loaded_date).days > SYNC_LAG_DAYS + 2`; equality is not stale.
+Missing checkpoints and failed syncs also produce visible warnings. The data notes
+explain hidden GSC queries, page totals as the main figures, missing data, and GA4
+user-count limitations. JSON preserves the data and Markdown presents the same
+windows, warnings, totals, selected flags, and query candidates.
+
+To review the existing synthetic sync data in a disposable local database, run the
+analysis command normally. `SYNC_FAKE_CLIENT` is unnecessary because analysis does
+not construct any Google client. The tests use fixture data and temp report folders:
+
+```sh
+pytest tests/test_read_api.py tests/analysis
+pytest
+```
+
 ## Deferred work
 
 - Replace the four `TODO-site*.example` domains and set real display names,
   GSC properties, and GA4 property IDs.
-- GSC/GA4 read endpoints, Ahrefs tables/integration, and the frontend.
+- Ahrefs tables/integration and the frontend.
 - Distributed rate limiting and individual session revocation when needed.

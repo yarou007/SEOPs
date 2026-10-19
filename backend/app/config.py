@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     ga4_service_account_file: Path | None = None
     sync_lag_days: int = Field(default=3, ge=0)
     sync_timezone: str = "UTC"
+    reports_dir: Path = Path("reports")
 
     @model_validator(mode="after")
     def default_ga4_credentials(self) -> Self:

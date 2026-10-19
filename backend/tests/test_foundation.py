@@ -62,13 +62,19 @@ def test_role_constraint_and_cascade_delete(db, seeded):
     assert db.scalar(select(func.count()).select_from(UserSite)) == 4
 
 
-def test_docs_list_only_foundation_routes(client):
+def test_docs_list_foundation_and_analytics_routes(client):
     assert client.get("/docs").status_code == 200
     assert set(client.get("/openapi.json").json()["paths"]) == {
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/me",
         "/api/sites",
+        "/api/sites/{slug}/summary",
+        "/api/sites/{slug}/timeseries",
+        "/api/sites/{slug}/gsc/pages",
+        "/api/sites/{slug}/gsc/queries",
+        "/api/sites/{slug}/ga4/pages",
+        "/api/sites/{slug}/status",
     }
 
 
