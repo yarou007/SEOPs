@@ -1,8 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,8 +16,15 @@ class Settings(BaseSettings):
     session_max_age_seconds: int = Field(default=1209600, gt=0)
     cors_origins: str = "http://localhost:3000"
     gsc_service_account_file: Path | None = None
+    ga4_service_account_file: Path | None = None
     sync_lag_days: int = Field(default=3, ge=0)
     sync_timezone: str = "UTC"
+
+    @model_validator(mode="after")
+    def default_ga4_credentials(self) -> Self:
+        if self.ga4_service_account_file is None:
+            self.ga4_service_account_file = self.gsc_service_account_file
+        return self
 
     @field_validator("sync_timezone")
     @classmethod

@@ -9,12 +9,16 @@ logger = logging.getLogger(__name__)
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="SEOPs data synchronization")
     commands = parser.add_subparsers(dest="command", required=True)
-    gsc = commands.add_parser("gsc", help="Sync finalized Google Search Console performance data")
-    sites = gsc.add_mutually_exclusive_group(required=True)
-    sites.add_argument("--site", metavar="SLUG", help="Sync one site by slug")
-    sites.add_argument("--all", action="store_true", help="Sync every active site")
-    gsc.add_argument("--from", dest="from_date", type=date.fromisoformat, metavar="YYYY-MM-DD")
-    gsc.add_argument("--to", dest="to_date", type=date.fromisoformat, metavar="YYYY-MM-DD")
+    for command, description in [
+        ("gsc", "Sync finalized Google Search Console performance data"),
+        ("ga4", "Sync Google Analytics 4 performance data"),
+    ]:
+        sync = commands.add_parser(command, help=description)
+        sites = sync.add_mutually_exclusive_group(required=True)
+        sites.add_argument("--site", metavar="SLUG", help="Sync one site by slug")
+        sites.add_argument("--all", action="store_true", help="Sync every active site")
+        sync.add_argument("--from", dest="from_date", type=date.fromisoformat, metavar="YYYY-MM-DD")
+        sync.add_argument("--to", dest="to_date", type=date.fromisoformat, metavar="YYYY-MM-DD")
     return parser
 
 
@@ -31,15 +35,21 @@ def main(argv: list[str] | None = None) -> int:
     from app.config import get_settings
     from app.db import SessionLocal
     from app.models import Site
-    from app.sync.gsc import sync_site
-    from app.sync.gsc_client import FakeGscClient, GscClient
 
     settings = get_settings()
-    if os.environ.get("SYNC_FAKE_CLIENT") == "1":
+    fake_mode = os.environ.get("SYNC_FAKE_CLIENT") == "1"
+    if fake_mode:
         logger.warning("SYNC_FAKE_CLIENT=1: test-only synthetic data will be written to Postgres")
-        client = FakeGscClient()
+    if args.command == "gsc":
+        from app.sync.gsc import sync_site
+        from app.sync.gsc_client import FakeGscClient, GscClient
+
+        client = FakeGscClient() if fake_mode else GscClient(settings.gsc_service_account_file)
     else:
-        client = GscClient(settings.gsc_service_account_file)
+        from app.sync.ga4 import sync_site
+        from app.sync.ga4_client import FakeGa4Client, Ga4Client
+
+        client = FakeGa4Client() if fake_mode else Ga4Client(settings.ga4_service_account_file)
     with SessionLocal() as db:
         statement = select(Site).order_by(Site.slug)
         if args.all:
@@ -58,6 +68,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         except Exception:
             # sync_site records the short error; do not dump credentials or response bodies here.
-            logger.error("GSC sync failed for %s; continuing with remaining sites", site.slug)
+            logger.error(
+                "%s sync failed for %s; continuing with remaining sites",
+                args.command.upper(),
+                site.slug,
+            )
             failed = True
     return int(failed)

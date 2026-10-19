@@ -20,6 +20,7 @@ dependencies = [
   "itsdangerous>=2.2,<3",
   "google-api-python-client>=2.160,<3",
   "google-auth>=2.38,<3",
+  "google-analytics-data>=0.18,<1",
 ]
 
 [project.optional-dependencies]

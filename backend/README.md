@@ -1,7 +1,7 @@
 # SEOPs backend foundation
 
 Python 3.12, FastAPI, SQLAlchemy 2, Pydantic 2, PostgreSQL 16, and Alembic.
-This backend provides database tables, authentication, site authorization, and GSC sync.
+This backend provides database tables, authentication, site authorization, and GSC/GA4 sync.
 All backend commands below run from `backend/`.
 
 ## Local setup
@@ -246,9 +246,99 @@ mapping, checkpoints, chunk rollback/recovery, missing properties, retries,
 per-site CLI failures, explicit fake activation, and real CLI/database writes.
 The existing auth and foundation tests run alongside these tests with `pytest`.
 
+## GA4 sync
+
+The GA4 CLI uses `google-analytics-data` (`BetaAnalyticsDataClient`) to load daily
+page metrics into `ga4_daily`. Set `sites.ga4_property_id` to the property's numeric
+ID (for example `123456789`, without a `properties/` prefix).
+
+Install the updated dependencies with `uv sync --locked --extra dev` or
+`python -m pip install -e '.[dev]'`. Configuration in `.env` or the environment:
+
+```dotenv
+GA4_SERVICE_ACCOUNT_FILE=/path/to/service-account.json
+SYNC_LAG_DAYS=3
+SYNC_TIMEZONE=UTC
+```
+
+If `GA4_SERVICE_ACCOUNT_FILE` is unset, it defaults to `GSC_SERVICE_ACCOUNT_FILE`.
+The shared service account must have access to both services if the same file is
+used. Enable the Google Analytics Data API for its Google Cloud project and grant
+the service account read access to the GA4 property. Credentials are loaded only
+from disk, with scope `https://www.googleapis.com/auth/analytics.readonly`. File
+contents and credential parsing details are never logged. Missing credentials
+produce an error; they never implicitly activate fake mode.
+
+```sh
+python -m app.sync --help
+python -m app.sync ga4 --help
+python -m app.sync ga4 --site arlington
+python -m app.sync ga4 --all
+python -m app.sync ga4 --site arlington --from 2026-10-01 --to 2026-10-07
+```
+
+`--all`, active-site filtering, per-site error isolation, exit codes, and date
+overrides work the same as GSC. A missing property ID is skipped with status
+`error` and exactly `ga4_property_id not set` in `ga4_sync_log.error`.
+
+Both sources use `app/sync/common.py` for date windows, seven-day chunks, batches
+of 1000, PostgreSQL upserts, checkpoint updates, and per-chunk transactions. GA4
+resumes from its own `ga4_sync_log.last_loaded_date + 1 day`, independently of GSC.
+The initial window starts 487 days before the end date (488 days inclusive).
+The end date is today in `SYNC_TIMEZONE` minus `SYNC_LAG_DAYS`.
+Successful empty chunks advance the checkpoint; failed chunks roll back all their
+pages while preserving earlier commits. Errors are truncated to 500 characters,
+success clears old errors, and historical overrides cannot move checkpoints backward.
+As with GSC, omit `--from` for normal outage recovery because it explicitly overrides
+the resume point. `rows_loaded` counts committed rows for the current run, including
+updated rows, and is 0 when already up to date.
+
+Reports request dimensions `date` and `pagePath`, and metrics `sessions`,
+`totalUsers`, `conversions`, and `engagementRate`. Requests use
+`properties/<ga4_property_id>` with ISO date ranges, ordered by date and page path
+for stable pagination. Paging starts at offset 0
+with a limit of 100000, increases the offset by the actual number of rows returned,
+and stops at the report's `row_count`. An unexpectedly empty page or a changing
+row count fails the chunk so an incomplete report cannot advance the checkpoint.
+The wrapper uses REST transport and disables SDK retries; HTTP 429 and 5xx errors
+get up to five total attempts, with sleeps of 1, 2, 4, and 8 seconds. Other errors
+fail immediately. See the [Google runReport reference](https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/properties/runReport).
+
+Rows use `sites.domain` as `site`, parse the date dimension from `YYYYMMDD`, and
+store `pagePath` verbatim as `page_path`. Paths such as `/`, `/services/`,
+`(not set)`, and `(other)` are retained without adding a domain. Counts map to
+integers and engagement rate is rounded to four decimal places. Upserts on
+`(site, data_date, page_path)` replace all metrics and refresh `pulled_at` without
+duplicating rows. No schema migration is needed for this feature.
+
+### Test-only GA4 offline mode
+
+The same explicitly exported `SYNC_FAKE_CLIENT=1` flag enables synthetic GA4 data.
+It writes to the selected database and bypasses credentials and all Google calls.
+It does not activate from `.env`; use it only against a disposable local database.
+Set a placeholder property ID on the seeded Arlington site first:
+
+```sql
+UPDATE sites SET ga4_property_id = '123456789' WHERE slug = 'arlington';
+```
+
+```sh
+SYNC_FAKE_CLIENT=1 python -m app.sync ga4 --site arlington
+```
+
+The fake produces one row per requested day with path `/sync-fake/`, sessions 20,
+total users 15, conversions 2, and engagement rate 0.7500. A default first run
+writes 488 rows. The flag and synthetic writes are clearly identified in logs.
+
+`tests/sync/test_ga4.py` uses fake clients or mocked SDK responses, blocks HTTP
+transports, and patches retry sleep. It covers 150000-row paging, date/path mapping,
+upsert updates, independent resume checkpoints, chunk and page rollback/recovery,
+incomplete reports, missing properties, retries, credential fallback, CLI isolation,
+and fake-mode activation. Run `pytest` to include all GA4, GSC, and auth tests.
+
 ## Deferred work
 
 - Replace the four `TODO-site*.example` domains and set real display names,
   GSC properties, and GA4 property IDs.
-- GA4 sync, GSC/GA4 read endpoints, Ahrefs tables/integration, and the frontend.
+- GSC/GA4 read endpoints, Ahrefs tables/integration, and the frontend.
 - Distributed rate limiting and individual session revocation when needed.
