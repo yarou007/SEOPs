@@ -1,4 +1,6 @@
 from functools import lru_cache
+from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,6 +14,18 @@ class Settings(BaseSettings):
     session_cookie_name: str = Field(default="seops_session", min_length=1)
     session_max_age_seconds: int = Field(default=1209600, gt=0)
     cors_origins: str = "http://localhost:3000"
+    gsc_service_account_file: Path | None = None
+    sync_lag_days: int = Field(default=3, ge=0)
+    sync_timezone: str = "UTC"
+
+    @field_validator("sync_timezone")
+    @classmethod
+    def valid_sync_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("SYNC_TIMEZONE must be a valid IANA timezone") from None
+        return value
 
     @field_validator("session_secret")
     @classmethod

@@ -1,7 +1,7 @@
 # SEOPs backend foundation
 
 Python 3.12, FastAPI, SQLAlchemy 2, Pydantic 2, PostgreSQL 16, and Alembic.
-This step provides database tables, authentication, and site authorization.
+This backend provides database tables, authentication, site authorization, and GSC sync.
 All backend commands below run from `backend/`.
 
 ## Local setup
@@ -154,9 +154,101 @@ session expiry/tampering/logout, login limits and window reset, viewer/admin acc
 membership changes, docs paths, cascade deletion, role checks, migration
 upgrade/downgrade and model parity, and two seed CLI runs preserving existing data.
 
+## GSC sync
+
+The standalone Python CLI pulls finalized Search Console performance data into
+`gsc_daily`, using `sites.domain` as the data key and `sites.gsc_property` as the
+Google API property. It does not depend on n8n or the FastAPI server.
+
+Install the updated dependencies with `uv sync --locked --extra dev` or
+`python -m pip install -e '.[dev]'`. Configure these settings in `.env` or the environment:
+
+```dotenv
+GSC_SERVICE_ACCOUNT_FILE=/path/to/service-account.json
+SYNC_LAG_DAYS=3
+SYNC_TIMEZONE=UTC
+```
+
+Enable the Search Console API for the service account's Google Cloud project and
+grant that service account access to each Search Console property. Store the JSON
+credentials file outside the repository. Credentials are read only from that file,
+with the `webmasters.readonly` scope; file contents are never logged. Set the real
+`sites.gsc_property` values, for example `sc-domain:arlington247lockrepair.com`.
+A missing property is skipped with status `error` and the message `gsc_property not set`.
+
+```sh
+python -m app.sync gsc --help
+python -m app.sync gsc --site arlington
+python -m app.sync gsc --all
+python -m app.sync gsc --site arlington --from 2026-10-01 --to 2026-10-07
+```
+
+`--all` processes active sites in slug order; each site has its own error handling.
+It continues after failures and exits 1 if any site failed, otherwise 0. `--site`
+explicitly selects one site, including an inactive site. Unknown slugs exit 1.
+`--from` and `--to` individually override the normal start/end dates, and dates are
+inclusive. If both are supplied, an inverted range is rejected.
+
+The normal end date is today's date in `SYNC_TIMEZONE` minus `SYNC_LAG_DAYS`.
+The normal start is the checkpoint's `last_loaded_date + 1 day`, or `end_date - 487 days`
+if there is no successful checkpoint (488 days inclusive). Timezones must be valid
+IANA names and lag must be nonnegative. The scheduling timezone chooses the end date;
+the date values returned by Google are stored as returned.
+
+The sync queries oldest-first chunks of at most seven days with dimensions
+`date, page, query, device` and `dataState=final`. Each chunk pages at offsets
+0, 25000, 50000, etc., stopping on a page shorter than 25000 rows. Rows are upserted
+in batches of at most 1000 against the complete composite primary key. Devices
+are uppercased, country is `all`, counts are integers, and decimal values are rounded
+to the database precision. Replays update metrics and `pulled_at` without duplicates.
+See the [Google query reference](https://developers.google.com/webmaster-tools/v1/searchanalytics/query).
+
+All pages of a chunk and its checkpoint commit together. Failure rolls back the
+current chunk, preserves previous committed chunks, and records a short error
+(at most 500 characters). A normal rerun resumes after the last completed chunk,
+including after an outage. Empty successful chunks still advance the checkpoint.
+`rows_loaded` counts rows committed during this run, not the lifetime table size;
+on a no-op run it is 0. Errors do not move the checkpoint, and success clears old errors.
+Historical replays do not move an existing checkpoint backward. An explicit forward
+`--from` overrides the resume point, so omit it for ordinary outage recovery.
+
+HTTP 429 and 5xx responses are retried up to five total attempts, sleeping 1, 2, 4,
+then 8 seconds. Other HTTP failures are raised immediately. Retry exhaustion is
+recorded as a site failure. There is no scheduler in this module: invoke the CLI
+manually or from your scheduler.
+
+### Test-only offline mode
+
+`SYNC_FAKE_CLIENT=1` must be explicitly set in the process environment. It does not
+activate from `.env`, and no other value enables it. Missing credentials never
+implicitly enable fake mode. This mode writes **synthetic data to the selected
+database**, so use a disposable local database. It skips all Google calls and all
+credential-file reads, but still requires the site's `gsc_property` to be set.
+For a seeded disposable database, set that field using SQL, for example:
+
+```sql
+UPDATE sites SET gsc_property = 'sc-domain:arlington247lockrepair.com'
+WHERE slug = 'arlington';
+```
+
+```sh
+SYNC_FAKE_CLIENT=1 python -m app.sync gsc --site arlington
+```
+
+The fake produces one row per requested day: page `https://<domain>/sync-fake`,
+query `TEST-ONLY synthetic query`, device `MOBILE`, country `all`, clicks 3,
+impressions 20, CTR 0.1500, and position 2.25. With the default first-run window it
+writes 488 rows; rerunning resumes with zero rows. Logs clearly identify fake mode.
+
+`tests/sync/test_gsc.py` uses canned clients or a mocked Google transport, blocks
+Google HTTP transports, and patches retry sleep. It verifies paging, upserts,
+mapping, checkpoints, chunk rollback/recovery, missing properties, retries,
+per-site CLI failures, explicit fake activation, and real CLI/database writes.
+The existing auth and foundation tests run alongside these tests with `pytest`.
+
 ## Deferred work
 
 - Replace the four `TODO-site*.example` domains and set real display names,
   GSC properties, and GA4 property IDs.
-- Sync jobs, GSC/GA4 read endpoints, Ahrefs tables/integration, and the frontend.
+- GA4 sync, GSC/GA4 read endpoints, Ahrefs tables/integration, and the frontend.
 - Distributed rate limiting and individual session revocation when needed.
