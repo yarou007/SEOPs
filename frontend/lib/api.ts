@@ -10,6 +10,11 @@ import type {
   Summary,
   User,
   WeeklyReport,
+  ConnectionInput,
+  CreateSiteInput,
+  SetupInfo,
+  SiteConnection,
+  SyncJob,
 } from "./types";
 
 export class ApiError extends Error {
@@ -95,6 +100,23 @@ export function createApi(transport: Transport = fetch) {
       }),
     logout: () => request<void>("/api/auth/logout", { method: "POST" }),
     sites: () => request<Site[]>("/api/sites"),
+    setup: () => request<SetupInfo>("/api/sites/setup"),
+    createSite: (payload: CreateSiteInput) =>
+      request<Site>("/api/sites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    connection: (slug: string) =>
+      request<SiteConnection>(`${sitePath(slug)}/connection`),
+    saveConnection: (slug: string, payload: ConnectionInput) =>
+      request<SiteConnection>(`${sitePath(slug)}/connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    syncSite: (slug: string) =>
+      request<SyncJob>(`${sitePath(slug)}/sync`, { method: "POST" }),
     status: (slug: string) => request<SourceStatus>(`${sitePath(slug)}/status`),
     summary: (slug: string, range: Partial<DateRange> = {}) =>
       request<Summary>(`${sitePath(slug)}/summary`, {}, { ...range }),

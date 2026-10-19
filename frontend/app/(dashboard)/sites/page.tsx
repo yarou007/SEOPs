@@ -18,12 +18,17 @@ export default async function Sites() {
   );
   return (
     <div>
-      <div className="mb-7">
-        <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
-        <p className="mt-1 text-muted">
-          {sites.length} accessible {sites.length === 1 ? "site" : "sites"}.
-          Select a site to review its performance.
-        </p>
+      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
+          <p className="mt-1 text-muted">
+            {sites.length} accessible {sites.length === 1 ? "site" : "sites"}.
+            Select a site to review its performance.
+          </p>
+        </div>
+        <Link href="/sites/new" className="button button-primary">
+          Add website
+        </Link>
       </div>
       {!sites.length ? (
         <EmptyState>No sites are linked to your account.</EmptyState>
@@ -36,7 +41,9 @@ export default async function Sites() {
               href={`/sites/${encodeURIComponent(site.slug)}`}
               className="panel block p-5 hover:border-accent"
             >
-              <h2 className="text-lg font-semibold">{site.display_name}</h2>
+              <h2 className="break-words text-lg font-semibold [overflow-wrap:anywhere]">
+                {site.display_name}
+              </h2>
               <p className="mt-1 break-all text-sm text-muted">{site.domain}</p>
               <div className="mt-6 space-y-3">
                 {status.data ? (

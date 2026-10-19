@@ -266,11 +266,19 @@ export default async function SitePage({
       >
         ← All sites
       </Link>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {site.display_name}
-        </h1>
-        <p className="mt-1 break-all text-muted">{site.domain}</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
+            {site.display_name}
+          </h1>
+          <p className="mt-1 break-all text-muted">{site.domain}</p>
+        </div>
+        <Link
+          href={`/sites/${encodeURIComponent(slug)}/settings`}
+          className="button"
+        >
+          Data connections
+        </Link>
       </div>
       <nav
         aria-label="Site sections"

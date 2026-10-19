@@ -66,6 +66,31 @@ rewrite. This is configuration, not a change to backend auth behavior.
 - `/`: checks `/api/auth/me` and redirects to `/sites` or `/login`.
 - `/sites`: accessible sites only, with per-source status and last loaded dates.
 - `/sites/[slug]`: Overview, Search, Traffic, Ahrefs, and Data status tabs.
+- `/sites/new`: all signed-in users can add a website, automatically linked to them.
+- `/sites/[slug]/settings`: Google properties, setup instructions, and real-data imports.
+
+### Add your real website
+
+1. Open **Sites → Add website**. Enter its display name and domain/homepage URL.
+2. Enter the exact Search Console property and/or numeric GA4 property ID, or save
+   now and fill these in later under **Data connections**.
+3. Follow the Google access instructions on that page. The administrator configures
+   `GSC_SERVICE_ACCOUNT_FILE` and optionally `GA4_SERVICE_ACCOUNT_FILE` in the backend
+   environment and enables the Google APIs. Grant the displayed service account
+   email access to each Google property. Private keys stay on the server.
+4. Save connections, then click **Sync real data**. The page polls the background
+   import and shows results; Data status has per-source diagnostics and checkpoints.
+   The first import can take several minutes. Later imports resume saved progress.
+
+Only a website's creator and admins may change its connections or start imports;
+other linked viewers keep read-only access. Duplicate domains cannot be claimed.
+New websites start empty, and HTTP imports always use real Google clients regardless
+of the CLI's fake-mode flag. Missing server credentials are shown explicitly and
+disable the import button. Successful imports also update the stored weekly report.
+The local Arlington browser fixture remains synthetic; adding a website does not
+convert or relabel fixture data as real. Backend migration 0002 is required.
+See the backend README for the current shared-service-account trust model and
+single-worker background-job limits.
 
 Protected pages have a server-side session check. Every site page first calls
 the protected `/status` endpoint, so a backend 404 becomes only **Site not found**.
@@ -151,9 +176,13 @@ certificate, logs in on desktop and phone, verifies only Arlington is accessible
 opens Overview/Search/Traffic, checks the unlinked-site 404, and logs out. It saves
 eight screenshots to `screenshots/`: login, sites, Overview, and Search at both widths.
 
-## Backend change in this step
+## Backend integration
 
-The only backend feature added is `GET /api/sites/{slug}/report/latest`, in a
-separate commit. Existing analysis wrote files but exposed no read endpoint.
-The new endpoint shares site authorization, returns the newest dated JSON file,
-and does not trigger analysis or sync. No existing backend behavior was changed.
+The original frontend added `GET /api/sites/{slug}/report/latest` in a separate
+commit because analysis wrote files but exposed no read endpoint. It shares site
+authorization and returns the newest stored JSON file.
+
+Website management subsequently adds `POST /api/sites`, `GET /api/sites/setup`,
+`GET`/`POST /api/sites/{slug}/connection`, and `POST /api/sites/{slug}/sync`.
+These preserve existing read response shapes. Backend migration 0002 records the
+creator who may manage a website, with admin access to all sites.

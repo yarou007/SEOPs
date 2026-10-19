@@ -8,6 +8,34 @@ export interface Site {
   domain: string;
   display_name: string;
 }
+export interface ConnectionInput {
+  gsc_property: string | null;
+  ga4_property_id: string | null;
+}
+export interface CreateSiteInput extends ConnectionInput {
+  display_name: string;
+  domain: string;
+}
+export interface CredentialInfo {
+  configured: boolean;
+  service_account_email: string | null;
+  message: string;
+}
+export type SetupInfo = Record<"gsc" | "ga4", CredentialInfo>;
+export interface SyncJob {
+  running: boolean;
+  started_at: string | null;
+  finished_at: string | null;
+  results: Record<
+    string,
+    { status: string; rows_loaded: number | null; message: string }
+  >;
+}
+export interface SiteConnection extends Site, ConnectionInput {
+  can_manage: boolean;
+  credentials: SetupInfo;
+  sync: SyncJob;
+}
 export interface DateRange {
   start: string;
   end: string;
