@@ -70,11 +70,75 @@ requests with `credentials: "include"`. CORS does not override SameSite cookie r
 | POST | `/api/auth/logout` | Clears cookie; returns 204, including when already logged out. |
 | GET | `/api/auth/me` | Returns `{id, email, role}`, or 401 for missing/invalid/expired sessions. |
 | GET | `/api/sites` | Returns accessible sites as `[{slug, domain, display_name}]`; requires a session. |
+| POST | `/api/sites` | Creates a website and links its creator. All signed-in users may create. |
+| GET | `/api/sites/setup` | Credential readiness and service account email; never credential files. |
+| GET | `/api/sites/{slug}/connection` | Saved Google properties, management permission, and background sync state. |
+| POST | `/api/sites/{slug}/connection` | Creator/admin updates Google property settings. |
+| POST | `/api/sites/{slug}/sync` | Creator/admin starts a real Google import; returns 202 immediately. |
 
 Emails are normalized to lowercase by seeding and login. Passwords use Argon2id
 through `argon2-cffi`; unknown emails still perform password verification against
 a dummy hash. Auth POSTs reject an untrusted browser `Origin`; non-browser clients
 without an `Origin` header are supported.
+
+### Add websites and connect real Google data
+
+Run `alembic upgrade head` when updating an existing installation. Migration 0002
+adds nullable `sites.created_by_user_id`; existing sites remain admin-managed.
+The frontend **Sites → Add website** form is available to every signed-in user.
+It accepts a name, domain or homepage URL, optional GSC property, and optional
+numeric GA4 property ID. Domains are normalized to lowercase ASCII/IDNA, and
+slugs are generated automatically. The creator receives a `user_sites` link and
+management rights; existing viewers retain read-only access to shared sites.
+Admins can manage all sites. Duplicate domains are rejected without granting access.
+Unknown and unlinked site URLs still return 404.
+
+The **Data connections** page explains Google access and offers **Sync real data**.
+For the administrator, configure the existing server settings (files stay on disk):
+
+```dotenv
+GSC_SERVICE_ACCOUNT_FILE=/absolute/path/to/service-account.json
+# Optional: defaults to the GSC file when omitted.
+GA4_SERVICE_ACCOUNT_FILE=/absolute/path/to/another-service-account.json
+```
+
+Enable the Search Console API and Google Analytics Data API in the service
+account's Google Cloud project. Restart FastAPI after changing configuration.
+For each website, add the service account email shown in the UI to the matching
+[Search Console property](https://support.google.com/webmasters/answer/7687615)
+and/or give it Viewer access to the
+[GA4 property](https://developers.google.com/analytics/devguides/reporting/data/v1/quickstart).
+Domain properties use `sc-domain:example.com`; URL-prefix properties must match
+the exact Google property, such as `https://www.example.com/`. GA4 uses a numeric
+property ID, never a `G-` measurement ID. No Google user password, private key,
+credential path, or credential parser exception is exposed through the browser.
+Credential readiness only checks the local file; the import verifies Google access.
+
+New websites start empty, without fixture data. The HTTP import always constructs
+the real Google clients and **ignores `SYNC_FAKE_CLIENT`**. It uses the existing
+lag, timezone, 487-day initial window, seven-day commits, retries, upserts, and
+checkpoint resume logic. Sources fail independently, with diagnostics in their
+existing sync logs. After a successful source import, it also saves the weekly
+report. Missing credentials return 503; no configured property returns 422.
+The UI polls connection state while a job runs and reports completion/errors.
+
+Domain changes are deliberately unsupported because metrics are keyed by domain.
+Properties cannot be changed after a source has a checkpoint: an administrator
+must explicitly archive/reset the source's old metrics and log before reconnecting,
+to prevent mixing properties or skipping history. Changes are blocked during sync.
+Auth-origin checks also protect all new write routes.
+
+This uses the existing manually provisioned, trusted user accounts and shared
+server service accounts; it is not per-user Google OAuth or Google ownership
+verification. Only provision users trusted to use those service accounts.
+For a public signup product, add per-user OAuth/property authorization first.
+
+For this local deployment, run **one FastAPI worker**. At most two website imports
+run concurrently, with one job per site, using FastAPI background tasks. The job
+registry is in memory; data/checkpoints persist in Postgres. On restart, unfinished
+chunks roll back and another click resumes from committed checkpoints. Do not run
+CLI imports concurrently with UI imports for the same site. Multiple API workers
+or durable queued jobs require a shared job queue/lock before deployment.
 
 `get_site_for_user(slug)` / `AccessibleSite` in `app/access.py` checks the current
 user's membership or admin role and returns the same 404 for missing and unlinked

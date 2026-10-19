@@ -46,6 +46,9 @@ class Site(Base):
     gsc_property: Mapped[str | None] = mapped_column(Text)
     ga4_property_id: Mapped[str | None] = mapped_column(Text)
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
 
 
 class UserSite(Base):
