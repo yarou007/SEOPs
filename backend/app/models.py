@@ -64,7 +64,9 @@ class UserSite(Base):
 
 class GscDaily(Base):
     __tablename__ = "gsc_daily"
-    __table_args__ = (CheckConstraint("device IN ('MOBILE', 'DESKTOP', 'TABLET')", name="device"),)
+    __table_args__ = (
+        CheckConstraint("device IN ('', 'MOBILE', 'DESKTOP', 'TABLET')", name="device"),
+    )
 
     # Sync data is keyed by sites.domain, never the slug.
     site: Mapped[str] = mapped_column(Text, primary_key=True)

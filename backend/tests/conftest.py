@@ -42,15 +42,21 @@ from scripts.seed import seed  # noqa: E402
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    result = subprocess.run(
         [sys.executable, "-m", *args],
         cwd=BACKEND,
         env=os.environ.copy(),
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         timeout=60,
     )
+
+    if result.returncode:
+        raise subprocess.CalledProcessError(
+            result.returncode, result.args, output=result.stdout, stderr=result.stderr
+        ) from RuntimeError(result.stderr)
+    return result
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -115,3 +121,38 @@ def login_as(client):
         return response
 
     return login
+
+
+def add_test_gsc_totals(db):
+    """Explicit aggregate fixtures for legacy tests; production never derives these."""
+    from collections import defaultdict
+    from decimal import Decimal
+
+    from app.models import GscDaily
+
+    db.flush()
+    groups = defaultdict(list)
+    for row in db.query(GscDaily).all():
+        for page, device in [("", ""), (row.page, ""), ("", row.device), (row.page, row.device)]:
+            groups[(row.site, row.data_date, page, device)].append(row)
+    for (site, day, page, device), rows in groups.items():
+        impressions = sum(row.impressions for row in rows)
+        clicks = sum(row.clicks for row in rows)
+        db.merge(
+            GscDaily(
+                site=site,
+                data_date=day,
+                page=page,
+                query="",
+                device=device,
+                country="all",
+                clicks=clicks,
+                impressions=impressions,
+                ctr=Decimal(clicks) / impressions if impressions else None,
+                position=sum((row.position or 0) * row.impressions for row in rows)
+                / Decimal(impressions)
+                if impressions
+                else None,
+            )
+        )
+    db.flush()

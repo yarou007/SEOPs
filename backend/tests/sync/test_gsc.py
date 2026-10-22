@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from app.config import Settings, get_settings
 from app.models import GscDaily, GscSyncLog, Site
 from app.sync.gsc import sync_site
-from app.sync.gsc_client import GSC_SCOPE, FakeGscClient, GscClient
+from app.sync.gsc_client import DETAIL, GSC_SCOPE, FakeGscClient, GscClient
 from app.sync.main import main
 
 FIRST = date(2026, 10, 1)
@@ -42,7 +42,11 @@ class RecordingClient(FakeGscClient):
         self.calls = []
         self.handler = handler
 
-    def query(self, site_property, start_date, end_date, start_row, row_limit=25000):
+    def query(
+        self, site_property, start_date, end_date, start_row, row_limit=25000, *, dimensions=DETAIL
+    ):
+        if dimensions != DETAIL:
+            return []
         self.calls.append((site_property, start_date, end_date, start_row, row_limit))
         if self.handler:
             return self.handler(site_property, start_date, end_date, start_row, row_limit)
@@ -325,6 +329,8 @@ def test_google_query_body_scopes_and_raw_rows(google_transport):
             "startDate": "2026-10-01",
             "endDate": "2026-10-01",
             "dimensions": ["date", "page", "query", "device"],
+            "aggregationType": "byPage",
+            "type": "web",
             "dataState": "final",
             "startRow": 25000,
             "rowLimit": 25000,
@@ -432,11 +438,11 @@ def test_cli_fake_mode_runs_real_upserts(site, db, monkeypatch):
     )
     assert result.returncode == 0
     assert "test-only synthetic data" in result.stderr
-    assert db.scalar(select(func.count()).select_from(GscDaily)) == 2
+    assert db.scalar(select(func.count()).select_from(GscDaily)) == 12
     log = get_log(db, site)
     assert log.status == "ok"
     assert log.last_loaded_date == date(2026, 10, 2)
-    assert log.rows_loaded == 2
+    assert log.rows_loaded == 12
 
 
 def test_cli_all_missing_property_exits_one_and_continues(site, db, monkeypatch):

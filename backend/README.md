@@ -551,3 +551,17 @@ pytest
   GSC properties, and GA4 property IDs.
 - Ahrefs tables/integration and the frontend.
 - Distributed rate limiting and individual session revocation when needed.
+
+### GSC aggregation grains
+
+GSC now requests property/date, page/date, device/date, country/date, and
+page/device/date totals in addition to visible query detail. Page/device totals
+preserve the weekly mobile-gap check. Empty omitted dimensions distinguish the
+grains; never sum them together. KPIs use property totals; page checks use
+query-free page totals; query tables are partial because Google hides queries.
+
+Existing query-only history needs an explicit replay after migration, for example:
+`python -m app.sync gsc --site <slug> --from 2026-09-22 --to 2026-10-19`.
+Resume checkpoints are preserved. Until replayed, missing aggregate grains show
+as unavailable, never as estimated totals derived from query detail. Each chunk
+commits all grains together; an error in any grain rolls the chunk back.
