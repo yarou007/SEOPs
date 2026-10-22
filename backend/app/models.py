@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -64,7 +65,9 @@ class UserSite(Base):
 
 class GscDaily(Base):
     __tablename__ = "gsc_daily"
-    __table_args__ = (CheckConstraint("device IN ('MOBILE', 'DESKTOP', 'TABLET')", name="device"),)
+    __table_args__ = (
+        CheckConstraint("device IN ('', 'MOBILE', 'DESKTOP', 'TABLET')", name="device"),
+    )
 
     # Sync data is keyed by sites.domain, never the slug.
     site: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -121,3 +124,37 @@ class Ga4SyncLog(Base):
     status: Mapped[str | None] = mapped_column(Text)
     rows_loaded: Mapped[int | None] = mapped_column(Integer)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class AxisSnapshot(Base):
+    """Source evidence collected explicitly; read endpoints never contact Google."""
+
+    __tablename__ = "axis_snapshots"
+    __table_args__ = (
+        Index("ix_axis_snapshots_site_kind_collected_at", "site", "kind", "collected_at"),
+    )
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid4, server_default=text("gen_random_uuid()")
+    )
+    site: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text)
+    start_date: Mapped[date | None] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    data: Mapped[dict] = mapped_column(JSONB)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class GscIndexStatus(Base):
+    __tablename__ = "gsc_index_status"
+
+    site: Mapped[str] = mapped_column(Text, primary_key=True)
+    url: Mapped[str] = mapped_column(Text, primary_key=True)
+    verdict: Mapped[str | None] = mapped_column(Text)
+    coverage_state: Mapped[str | None] = mapped_column(Text)
+    indexing_state: Mapped[str | None] = mapped_column(Text)
+    last_crawl_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    inspected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )

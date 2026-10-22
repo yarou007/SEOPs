@@ -4,6 +4,11 @@ Client-facing platform where each client connects their own analytics sources (S
 
 Status key: [ ] not started, [~] in progress, [x] done
 
+## Core analysis
+
+The ordered product questions, source gaps and next actions are recorded in
+[Analysis axes](ANALYSIS_AXES.md).
+
 ## Assumptions
 - You create client organizations and invite their users. Self sign-up comes later.
 - Google access uses service accounts. Clients add our service-account email to their own properties. OAuth comes later, if ever.

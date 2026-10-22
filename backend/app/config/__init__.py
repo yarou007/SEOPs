@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     ga4_service_account_file: Path | None = None
     sync_lag_days: int = Field(default=3, ge=0)
     sync_timezone: str = "UTC"
+    ga4_call_click_events: dict[str, str] = Field(default_factory=dict)
+    portfolio_site_slugs: list[str] = Field(default_factory=list)
     reports_dir: Path = Path("reports")
 
     @model_validator(mode="after")

@@ -66,10 +66,18 @@ def public(value, key: str = ""):
     return value
 
 
-def _gsc_filters(domain: str, window: Window, device: str | None = None) -> list:
+def _gsc_filters(
+    domain: str, window: Window, device: str | None = None, grain: str = "property"
+) -> list:
     filters = [GscDaily.site == domain, GscDaily.data_date.between(window.start, window.end)]
-    if device is not None:
-        filters.append(GscDaily.device == device)
+    filters.append(GscDaily.country == "all")
+    if grain == "query":
+        filters.extend([GscDaily.query != "", GscDaily.page != "", GscDaily.device != ""])
+        if device is not None:
+            filters.append(GscDaily.device == device)
+    else:
+        filters.extend([GscDaily.query == "", GscDaily.device == (device or "")])
+        filters.append(GscDaily.page != "" if grain == "page" else GscDaily.page == "")
     return filters
 
 
@@ -121,7 +129,9 @@ def gsc_pages(
     limit: int | None = None,
     offset: int = 0,
 ) -> list[dict]:
-    statement = select(GscDaily.page, *_gsc_columns()).where(*_gsc_filters(domain, window, device))
+    statement = select(GscDaily.page, *_gsc_columns()).where(
+        *_gsc_filters(domain, window, device, "page")
+    )
     statement = (
         statement.group_by(GscDaily.page)
         .order_by(func.sum(GscDaily.impressions).desc(), GscDaily.page)
@@ -142,7 +152,7 @@ def gsc_queries(
     min_impressions: int | None = None,
     position_range: tuple[float, float] | None = None,
 ) -> list[dict]:
-    filters = [*_gsc_filters(domain, window, device), GscDaily.query != ""]
+    filters = _gsc_filters(domain, window, device, "query")
     page_totals = (
         select(
             GscDaily.query,

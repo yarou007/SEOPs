@@ -1,7 +1,7 @@
 # SEOPs frontend
 
-Next.js App Router, strict TypeScript, and Tailwind CSS. No component or chart
-library: the Overview chart is an accessible SVG with gaps for missing values.
+Next.js App Router, strict TypeScript, and Tailwind CSS. The Overview chart is an
+accessible SVG with gaps for missing values; Analysis uses Recharts for bar, scatter and donut charts, and CSS grid for the link heatmap.
 All displayed data comes from the existing FastAPI contracts.
 
 ## Run locally
@@ -65,7 +65,7 @@ rewrite. This is configuration, not a change to backend auth behavior.
 - `/login`: email/password form, generic invalid-credential message, pending/error states.
 - `/`: checks `/api/auth/me` and redirects to `/sites` or `/login`.
 - `/sites`: accessible sites only, with per-source status and last loaded dates.
-- `/sites/[slug]`: Overview, Search, Traffic, Ahrefs, and Data status tabs.
+- `/sites/[slug]`: Overview, Search, Traffic, Analysis, Ahrefs, and Data status tabs.
 - `/sites/new`: all signed-in users can add a website, automatically linked to them.
 - `/sites/[slug]/settings`: Google properties, setup instructions, and real-data imports.
 
@@ -88,7 +88,7 @@ New websites start empty, and HTTP imports always use real Google clients regard
 of the CLI's fake-mode flag. Missing server credentials are shown explicitly and
 disable the import button. Successful imports also update the stored weekly report.
 The local Arlington browser fixture remains synthetic; adding a website does not
-convert or relabel fixture data as real. Backend migration 0002 is required.
+convert or relabel fixture data as real. Run backend migrations through 0004 before opening Analysis.
 See the backend README for the current shared-service-account trust model and
 single-worker background-job limits.
 
@@ -97,7 +97,7 @@ the protected `/status` endpoint, so a backend 404 becomes only **Site not found
 The header logout button calls `/api/auth/logout`, then clears the displayed route
 state by redirecting to `/login` and refreshing. No credentials are placed in URLs.
 
-Tabs use `?tab=overview|search|traffic|ahrefs|status`. Dates use `?start=&end=`;
+Tabs use `?tab=overview|search|traffic|analysis|ahrefs|status`. Dates use `?start=&end=`;
 presets use the **backend's default end**, not a hardcoded client lag/timezone.
 The default 28-day range is taken from `summary.current_window`. Custom dates
 validate ordering and the same 16-calendar-month limit; backend 422 details are
@@ -186,3 +186,46 @@ Website management subsequently adds `POST /api/sites`, `GET /api/sites/setup`,
 `GET`/`POST /api/sites/{slug}/connection`, and `POST /api/sites/{slug}/sync`.
 These preserve existing read response shapes. Backend migration 0002 records the
 creator who may manage a website, with admin access to all sites.
+
+## Analysis tab
+
+Open a site and choose **Analysis**. All eight axes follow
+[the product order](../docs/ANALYSIS_AXES.md). Date-filtered reads use
+`GET /api/sites/{slug}/axes/{axis}`; the backend README documents the eight routes,
+source collection commands, zone configuration and existing-call-event mapping.
+Sitemap/crawl/backlink evidence is explicitly labeled as the latest snapshot,
+not a historical result for the selected range.
+
+Each panel has a Ready/Partial/Needs setup badge (its reason is available on focus
+and hover and below the chart), a one-line finding, an accessible table and either
+an interactive chart or an actionable empty state. Null means unavailable; zero
+means a recorded zero. Query panels remain partial because Google hides queries.
+The chart colors follow the same CSS variables in light and dark modes. Device
+CTR (%) uses the left axis and average position the right axis. Charts fit phone
+width and tables/heatmaps scroll inside their panels. Reduced-motion preferences
+are respected; chart entrance animations are disabled.
+
+Website creators/admins can upload **Site Audit CSV** and **Backlinks CSV** in the
+corresponding Analysis panels. Each upload belongs to the currently opened site;
+repeat on the other portfolio sites for the full matrix. UTF-8 and UTF-16 exports
+are supported, at most 2 MB. The backend validates required columns and website
+ownership, and retains prior evidence while selecting the latest upload. Missing
+exports give unknown cells rather than zero links. Other linked viewers see the
+same evidence without upload controls. No Ahrefs credentials or API are used.
+
+The eight axes include setup gaps by design: call clicks need an existing event,
+zones start empty, indexing needs inspections, link axes need CSVs, and volume /
+difficulty need a future keyword provider. SEOPs does not install tracking code.
+
+### Analysis verification
+
+`tests/analysis.test.ts` covers status badge logic, null/zero handling, chart
+transforms, position bands, direction of link counts, and summary selection.
+`e2e/analysis.spec.ts` uses the disposable backend fixture above: it verifies all
+eight panels on desktop, phone, and dark-mode phone; missing-source setup states;
+CSV upload/refresh; and the 5×5 admin heatmap. The fixture seed includes explicit
+GSC aggregate grains and synthetic OS/inspection/link snapshots, and never calls
+Google. `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` optionally override the fixture admin.
+
+Screenshots in [`screenshots/analysis/`](screenshots/analysis/README.md) are clearly
+labeled **synthetic browser fixtures**, not figures for a connected real website.
