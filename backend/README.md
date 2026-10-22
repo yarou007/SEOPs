@@ -565,3 +565,75 @@ Existing query-only history needs an explicit replay after migration, for exampl
 Resume checkpoints are preserved. Until replayed, missing aggregate grains show
 as unavailable, never as estimated totals derived from query detail. Each chunk
 commits all grains together; an error in any grain rolls the chunk back.
+
+## Analysis axes
+
+See [the ordered questions and setup gaps](../docs/ANALYSIS_AXES.md).
+All eight GET routes accept the same optional `start=YYYY-MM-DD` and
+`end=YYYY-MM-DD`, enforce site access (404 for an unlinked site), and return
+`{status, reason, data}`. `/docs` lists them under **analysis axes**:
+
+| Route under `/api/sites/{slug}/axes/` | Evidence and availability |
+| --- | --- |
+| `impressions-clicks` | Query-free page totals and visible queries; partial because queries are hidden. High impressions means >=100, zero clicks means exactly zero. Explanations are hypotheses. |
+| `funnel` | Property impressions/clicks, summed GA4 sessions, configured call-event count. Needs setup until the event is observed. Cross-source ratios can exceed 100%; all GA4 traffic is included and this is not user-level attribution. |
+| `devices` | GSC device totals and site-level GA4 OS sessions/conversions; always partial because OS cannot join to GSC pages/queries. |
+| `geography` | Emergency locksmith queries containing a name from `app/config/zones.py` (initially empty); partial once configured because query wording is not visitor location. |
+| `sitemaps` | Latest sitemap metadata and stored URL Inspection sample; partial even after inspection because the sample is bounded. Date filter does not make this a historical snapshot. Excluded (`NEUTRAL`) and invalid (`FAIL`) verdicts count as not indexed; unknown verdicts remain separate. |
+| `internal-links` | Latest uploaded Site Audit CSV: orphan candidates, broken HTTP targets and inbound distribution. Crawl snapshot, not historical window data. |
+| `site-links` | Latest backlinks uploads for up to five accessible active sites. Configure `PORTFOLIO_SITE_SLUGS` to select the five. Null cells mean missing exports; zero means an export contained no matching source→target link. Placeholder sites or missing exports keep the view partial. |
+| `search-requests` | Visible query impressions/clicks/position and `impressions * (1-CTR)` only for positions 4–20 inclusive. Volume/difficulty null and keyword-provider status needs_setup; no paid provider. |
+
+Display queries/pages are limited to the top 1,000 by impressions. Geography
+aggregates all matching stored queries. Query figures sum page-level visible
+query detail and can count multiple URLs for a search; they are not property
+query totals. Blank dimensions are never mixed with detail rows.
+
+### Collecting additional evidence
+
+GET requests **never** contact Google. Collection is an explicit operator command,
+using the existing read-only service accounts. No tracking tags are added and no
+Ahrefs API or credentials are used. Migrate first: `alembic upgrade head`.
+
+```sh
+# Sitemap metadata only, then optionally inspect a supplied list of page URLs.
+python -m app.analysis.sources gsc --site dcemergencylockanddoor-com
+python -m app.analysis.sources gsc --site dcemergencylockanddoor-com --urls-file submitted-urls.txt
+# OS report for the exact selected dashboard window.
+python -m app.analysis.sources ga4 --site dcemergencylockanddoor-com --start 2026-09-22 --end 2026-10-19
+# Existing event name, only after confirming what the event actually measures:
+# GA4_CALL_CLICK_EVENTS={"dcemergencylockanddoor-com":"your_existing_call_event"}
+# Then rerun the GA4 collection command. No rows for that event means unknown,
+# not a fabricated zero. Do not use a general click event as a call event.
+python -m app.analysis.sources csv --site arlington --kind internal-links --file audit.csv
+python -m app.analysis.sources csv --site arlington --kind backlinks --file backlinks.csv
+```
+
+Inspection accepts one absolute website page URL per line, deduplicates URLs,
+and rejects more than 200 unique URLs before any API call. Supply actual submitted
+URLs from your sitemap export. Sitemap metadata can provide counts but does not
+provide a complete submitted-URL inventory. Counts across files may overlap.
+Results upsert into `gsc_index_status`; collection commits atomically. An unknown
+inspection verdict stays unknown. Snapshot times remain visible and snapshots
+older than seven days are labeled stale. Google scope/reference:
+[Sitemaps list](https://developers.google.com/webmaster-tools/v1/sitemaps/list),
+[URL Inspection](https://developers.google.com/webmaster-tools/v1/urlInspection.index/inspect),
+[GA4 dimensions and metrics](https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema).
+
+The Analysis tab also accepts CSV files for website creators/admins via
+`POST /api/sites/{slug}/axes/imports` with JSON `{kind, csv}`. Uploads require the
+same origin checks as connection changes. Limit: 2 MB / 20,000 rows. The local
+CLI accepts UTF-8/UTF-16 Ahrefs exports; delimiter detection supports comma, tab,
+and semicolon. Supported headers:
+
+- Site Audit: `URL` (or `Page URL`), `Inlinks` (or `No. of inlinks`,
+  `Incoming internal links`, `Inbound links`), `HTTP status code` (or `HTTP code`,
+  `Status code`). Optional `Is orphan` / `Orphan`. Without the orphan column,
+  non-home pages with zero inbound links are candidates, not proof of a complete crawl.
+- Backlinks: `Referring page URL` (or `Source URL`), `Target URL`. Target URLs must
+  belong to the website. Duplicate source/target URL pairs count once.
+
+Other export shapes are rejected with the missing column named. Broken targets
+mean HTTP 4xx/5xx; individual referring edges require a link-level export. No data
+is fabricated for absent exports. All source snapshots are stored in Postgres;
+latest upload replaces the evidence selected by reads, retaining prior evidence.

@@ -79,7 +79,8 @@ def migrated_schema():
 def clean_database(migrated_schema):
     with engine.begin() as connection:
         connection.exec_driver_sql(
-            "TRUNCATE user_sites, users, sites, gsc_daily, gsc_sync_log, ga4_daily, ga4_sync_log"
+            "TRUNCATE axis_snapshots, gsc_index_status, user_sites, users, sites, "
+            "gsc_daily, gsc_sync_log, ga4_daily, ga4_sync_log"
         )
 
 
