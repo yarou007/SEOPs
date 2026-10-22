@@ -2,6 +2,7 @@
 
 import os
 import sys
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -12,17 +13,24 @@ os.environ.setdefault("SEED_ADMIN_PASSWORD", "admin-smoke-test-password")
 os.environ.setdefault("SEED_VIEWER_EMAIL", "viewer@example.com")
 os.environ.setdefault("SEED_VIEWER_PASSWORD", "viewer-smoke-test-password")
 
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.dialects.postgresql import insert  # noqa: E402
-from sqlalchemy.engine import make_url  # noqa: E402
-
-from app.analysis.weekly import build_report, write_report  # noqa: E402
-from app.config import get_settings  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
-from app.metrics import default_end  # noqa: E402
-from app.models import Ga4Daily, Ga4SyncLog, GscDaily, GscSyncLog, Site  # noqa: E402
-from app.sync.common import upsert_rows  # noqa: E402
-from scripts.seed import seed  # noqa: E402
+from app.analysis.weekly import build_report, write_report
+from app.config import get_settings
+from app.db import SessionLocal
+from app.metrics import default_end
+from app.models import (
+    AxisSnapshot,
+    Ga4Daily,
+    Ga4SyncLog,
+    GscDaily,
+    GscIndexStatus,
+    GscSyncLog,
+    Site,
+)
+from app.sync.common import upsert_rows
+from scripts.seed import seed
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.engine import make_url
 
 
 def main():
@@ -33,7 +41,14 @@ def main():
         )
     seed()
     end = default_end(settings)
-    paths = ["", "emergency-locksmith/", "lock-repair/", "car-lockout/", "rekeying/", "contact/"]
+    paths = [
+        "",
+        "emergency-locksmith/",
+        "lock-repair/",
+        "car-lockout/",
+        "rekeying/",
+        "contact/",
+    ]
     paths += [f"services/service-{i}/" for i in range(1, 30)]
     gsc, ga4 = [], []
     domain = "arlington247lockrepair.com"
@@ -51,7 +66,9 @@ def main():
                     clicks = 1
                 if index == 5 and current:
                     clicks = 0
-                position = Decimal("3.2") if index == 0 else Decimal(str(4 + index % 16))
+                position = (
+                    Decimal("3.2") if index == 0 else Decimal(str(4 + index % 16))
+                )
                 gsc.append(
                     {
                         "site": domain,
@@ -92,13 +109,46 @@ def main():
                     "engagement_rate": Decimal("0.5"),
                 }
             )
+    # Aggregate fixture grains explicitly. This only runs in a disposable _smoke DB.
+    groups = defaultdict(list)
+    for row in gsc:
+        for page, device, country in [
+            ("", "", "all"),
+            (row["page"], "", "all"),
+            ("", row["device"], "all"),
+            ("", "", "usa"),
+            (row["page"], row["device"], "all"),
+        ]:
+            groups[(row["data_date"], page, device, country)].append(row)
+    for (day, page, device, country), rows in groups.items():
+        impressions = sum(row["impressions"] for row in rows)
+        clicks = sum(row["clicks"] for row in rows)
+        gsc.append(
+            {
+                "site": domain,
+                "data_date": day,
+                "page": page,
+                "query": "",
+                "device": device,
+                "country": country,
+                "clicks": clicks,
+                "impressions": impressions,
+                "ctr": Decimal(clicks) / impressions,
+                "position": sum(row["position"] * row["impressions"] for row in rows)
+                / impressions,
+            }
+        )
     with SessionLocal.begin() as db:
         site = db.scalar(select(Site).where(Site.slug == "arlington"))
         site.gsc_property = f"sc-domain:{domain}"
         site.ga4_property_id = "123456789"
         for rows, model, metric_fields in [
             (gsc, GscDaily, ("clicks", "impressions", "ctr", "position")),
-            (ga4, Ga4Daily, ("sessions", "total_users", "conversions", "engagement_rate")),
+            (
+                ga4,
+                Ga4Daily,
+                ("sessions", "total_users", "conversions", "engagement_rate"),
+            ),
         ]:
             for offset in range(0, len(rows), 1000):
                 upsert_rows(db, model, rows[offset : offset + 1000], metric_fields)
@@ -117,6 +167,84 @@ def main():
                 .on_conflict_do_update(
                     index_elements=[model.site],
                     set_={key: value for key, value in values.items() if key != "site"},
+                )
+            )
+    with SessionLocal.begin() as db:
+        # Re-running smoke setup replaces only its own synthetic snapshots.
+        db.query(AxisSnapshot).delete()
+        db.query(GscIndexStatus).delete()
+        db.add(
+            AxisSnapshot(
+                site=domain,
+                kind="os",
+                start_date=end - timedelta(days=27),
+                end_date=end,
+                data={
+                    "rows": [
+                        {"os": "iOS", "sessions": 38, "conversions": 2},
+                        {"os": "Android", "sessions": 52, "conversions": 3},
+                        {"os": "other", "sessions": 107, "conversions": 1},
+                    ]
+                },
+            )
+        )
+        db.add(
+            AxisSnapshot(
+                site=domain,
+                kind="sitemaps",
+                data={
+                    "submitted": 35,
+                    "sitemaps": [{"url": f"https://{domain}/sitemap.xml"}],
+                },
+            )
+        )
+        for i in range(12):
+            db.add(
+                GscIndexStatus(
+                    site=domain,
+                    url=f"https://{domain}/test-page-{i}",
+                    verdict="PASS" if i < 9 else "NEUTRAL",
+                    coverage_state="Indexed" if i < 9 else "Excluded by noindex",
+                )
+            )
+        db.add(
+            AxisSnapshot(
+                site=domain,
+                kind="internal-links",
+                data={
+                    "pages_count": 35,
+                    "orphans": [
+                        {"url": f"https://{domain}/test-orphan", "inbound_links": 0}
+                    ],
+                    "broken_links": [
+                        {"url": f"https://{domain}/test-broken", "http_status": 404}
+                    ],
+                    "inbound_distribution": [
+                        {"inbound_links": 0, "pages": 1},
+                        {"inbound_links": 1, "pages": 5},
+                        {"inbound_links": 3, "pages": 18},
+                        {"inbound_links": 10, "pages": 11},
+                    ],
+                },
+            )
+        )
+        portfolio = list(db.scalars(select(Site).order_by(Site.slug)))
+        for i, target in enumerate(portfolio):
+            db.add(
+                AxisSnapshot(
+                    site=target.domain,
+                    kind="backlinks",
+                    data={
+                        "links": [
+                            {
+                                "source_domain": source.domain,
+                                "target_domain": target.domain,
+                                "links": (i + j) % 4 + 1,
+                            }
+                            for j, source in enumerate(portfolio)
+                            if source.id != target.id
+                        ]
+                    },
                 )
             )
     with SessionLocal() as db:
