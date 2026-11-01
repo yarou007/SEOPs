@@ -12,6 +12,15 @@ from googleapiclient.errors import HttpError
 
 GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
 PAGE_SIZE = 25000
+DETAIL = ("date", "page", "query", "device")
+GRAINS = (
+    DETAIL,
+    ("date",),
+    ("date", "page"),
+    ("date", "device"),
+    ("date", "country"),
+    ("date", "page", "device"),
+)
 
 
 class GscRow(TypedDict):
@@ -30,6 +39,8 @@ class GscQueryClient(Protocol):
         end_date: date,
         start_row: int,
         row_limit: int = PAGE_SIZE,
+        *,
+        dimensions: tuple[str, ...] = DETAIL,
     ) -> list[GscRow]: ...
 
 
@@ -70,12 +81,16 @@ class GscClient:
         end_date: date,
         start_row: int,
         row_limit: int = PAGE_SIZE,
+        *,
+        dimensions: tuple[str, ...] = DETAIL,
     ) -> list[GscRow]:
         service = self._get_service()
         body = {
             "startDate": start_date.isoformat(),
             "endDate": end_date.isoformat(),
-            "dimensions": ["date", "page", "query", "device"],
+            "dimensions": list(dimensions),
+            "aggregationType": "byPage" if "page" in dimensions else "byProperty",
+            "type": "web",
             "dataState": "final",
             "rowLimit": row_limit,
             "startRow": start_row,
@@ -103,6 +118,8 @@ class FakeGscClient:
         end_date: date,
         start_row: int,
         row_limit: int = PAGE_SIZE,
+        *,
+        dimensions: tuple[str, ...] = DETAIL,
     ) -> list[GscRow]:
         domain = (
             site_property.removeprefix("sc-domain:")
@@ -113,10 +130,14 @@ class FakeGscClient:
         return [
             {
                 "keys": [
-                    (start_date + timedelta(days=i)).isoformat(),
-                    f"https://{domain}/sync-fake",
-                    "TEST-ONLY synthetic query",
-                    "mobile",
+                    {
+                        "date": (start_date + timedelta(days=i)).isoformat(),
+                        "page": f"https://{domain}/sync-fake",
+                        "query": "TEST-ONLY synthetic query",
+                        "device": "mobile",
+                        "country": "usa",
+                    }[dimension]
+                    for dimension in dimensions
                 ],
                 "clicks": 3.0,
                 "impressions": 20.0,

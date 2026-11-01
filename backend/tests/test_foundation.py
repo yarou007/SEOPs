@@ -19,6 +19,8 @@ def test_migration_round_trip_on_empty_schema():
         "ga4_daily",
         "ga4_sync_log",
         "alembic_version",
+        "axis_snapshots",
+        "gsc_index_status",
     }
     assert set(inspect(engine).get_table_names()) == expected
     run_cli("alembic", "downgrade", "base")
@@ -79,6 +81,20 @@ def test_docs_list_foundation_and_analytics_routes(client):
         "/api/sites/{slug}/ga4/pages",
         "/api/sites/{slug}/status",
         "/api/sites/{slug}/report/latest",
+        *{
+            f"/api/sites/{{slug}}/axes/{axis}"
+            for axis in [
+                "impressions-clicks",
+                "funnel",
+                "devices",
+                "geography",
+                "sitemaps",
+                "internal-links",
+                "site-links",
+                "search-requests",
+                "imports",
+            ]
+        },
     }
 
 

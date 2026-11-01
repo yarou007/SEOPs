@@ -1,3 +1,9 @@
+import { Analysis } from "@/components/analysis";
+import {
+  axisDefinitions,
+  type AxisKey,
+  type AxisResponse,
+} from "@/lib/analysis";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { serverApi, result } from "@/lib/server-api";
@@ -24,6 +30,7 @@ const tabs = [
   ["overview", "Overview"],
   ["search", "Search"],
   ["traffic", "Traffic"],
+  ["analysis", "Analysis"],
   ["ahrefs", "Ahrefs"],
   ["status", "Data status"],
 ] as const;
@@ -156,7 +163,8 @@ async function Search({
         <ErrorState message={queries.error ?? "Could not load queries."} />
       )}
       <p className="text-xs text-muted">
-        Google hides some queries. Use page totals as the main figure.
+        Partial query data: Google hides some queries. Use query-free page
+        totals for pages and property totals for KPIs.
       </p>
     </div>
   );
@@ -203,6 +211,37 @@ async function Traffic({
         <ErrorState message={rows.error ?? "Could not load traffic pages."} />
       )}
     </div>
+  );
+}
+
+async function AnalysisTab({
+  slug,
+  summary,
+}: {
+  slug: string;
+  summary: Summary;
+}) {
+  const api = await serverApi();
+  const [responses, connection] = await Promise.all([
+    Promise.all(
+      axisDefinitions.map(
+        async ([key]) =>
+          [
+            key,
+            await result(api.axis(slug, key, summary.current_window)),
+          ] as const,
+      ),
+    ),
+    result(api.connection(slug)),
+  ]);
+  return (
+    <Analysis
+      slug={slug}
+      axes={
+        Object.fromEntries(responses) as Record<AxisKey, Result<AxisResponse>>
+      }
+      canManage={connection.data?.can_manage ?? false}
+    />
   );
 }
 
@@ -306,6 +345,8 @@ export default async function SitePage({
         <Search slug={slug} summary={selected.data} query={query} />
       ) : tab === "traffic" ? (
         <Traffic slug={slug} summary={selected.data} query={query} />
+      ) : tab === "analysis" ? (
+        <AnalysisTab slug={slug} summary={selected.data} />
       ) : tab === "ahrefs" ? (
         <section className="panel p-6">
           <h2 className="text-lg font-semibold">Ahrefs</h2>

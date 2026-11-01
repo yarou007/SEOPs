@@ -5,7 +5,7 @@ from decimal import Decimal
 import httplib2
 import pytest
 import requests
-from conftest import run_cli
+from conftest import add_test_gsc_totals, run_cli
 
 from app import metrics
 from app.analysis.weekly import (
@@ -228,6 +228,7 @@ def capped_data(db, site):
             Ga4SyncLog(site=DOMAIN, last_loaded_date=END, status="ok", rows_loaded=1),
         ]
     )
+    add_test_gsc_totals(db)
     db.commit()
 
 

@@ -4,6 +4,7 @@ from decimal import Decimal
 import httplib2
 import pytest
 import requests
+from conftest import add_test_gsc_totals
 
 from app import metrics
 from app.models import Ga4Daily, Ga4SyncLog, GscDaily, GscSyncLog
@@ -82,6 +83,7 @@ def data(db, client):
             ),
         ]
     )
+    add_test_gsc_totals(db)
     db.commit()
 
 
@@ -345,9 +347,9 @@ def test_present_zero_rows_are_not_reported_as_missing_sources(get, db):
             GscDaily(
                 site=DOMAIN,
                 data_date=day,
-                page=f"https://{DOMAIN}/zero",
+                page="",
                 query="",
-                device="MOBILE",
+                device="",
                 clicks=0,
                 impressions=0,
                 position=None,

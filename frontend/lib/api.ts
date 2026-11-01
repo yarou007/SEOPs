@@ -1,3 +1,4 @@
+import type { AxisKey, AxisResponse } from "./analysis";
 import type {
   DateRange,
   DayMetrics,
@@ -157,6 +158,18 @@ export function createApi(transport: Transport = fetch) {
         {},
         { ...range, limit, offset },
       ),
+    axis: (slug: string, axis: AxisKey, range: Partial<DateRange>) =>
+      request<AxisResponse>(`${sitePath(slug)}/axes/${axis}`, {}, { ...range }),
+    uploadAxisCsv: (
+      slug: string,
+      kind: "internal-links" | "backlinks",
+      csv: string,
+    ) =>
+      request<{ id: string }>(`${sitePath(slug)}/axes/imports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, csv }),
+      }),
     report: (slug: string) =>
       request<WeeklyReport>(`${sitePath(slug)}/report/latest`),
   };

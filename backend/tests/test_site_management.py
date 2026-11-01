@@ -250,15 +250,15 @@ def test_sync_uses_existing_pipelines_and_updates_report(client, owned, ready, d
     assert response.json()["running"] is True
     result = client.get("/api/sites/example-com/connection").json()["sync"]
     assert result["running"] is False
-    assert result["results"]["gsc"]["rows_loaded"] == 2
+    assert result["results"]["gsc"]["rows_loaded"] == 12
     assert result["results"]["ga4"]["rows_loaded"] == 2
     assert result["results"]["report"]["status"] == "ok"
-    assert db.scalar(select(func.count()).select_from(GscDaily)) == 2
+    assert db.scalar(select(func.count()).select_from(GscDaily)) == 12
     assert db.scalar(select(func.count()).select_from(Ga4Daily)) == 2
     assert db.get(GscSyncLog, "example.com").last_loaded_date == end
     assert (ready / "example-com").is_dir()
     assert client.post("/api/sites/example-com/sync").status_code == 202
-    assert db.scalar(select(func.count()).select_from(GscDaily)) == 2
+    assert db.scalar(select(func.count()).select_from(GscDaily)) == 12
 
 
 def test_sync_continues_when_one_source_fails(client, owned, ready, monkeypatch):

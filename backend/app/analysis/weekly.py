@@ -47,10 +47,10 @@ ANALYSIS_THRESHOLDS = {
 }
 
 DATA_NOTES = [
-    "GSC hides some queries, so query totals will be lower than page totals. "
-    "Always use page totals as the main figure.",
-    "Page totals sum the available stored query-level GSC rows; hidden-query traffic "
-    "cannot be reconstructed from this schema. Blank queries are omitted from query tables.",
+    "GSC hides some queries: query tables and candidates are partial. "
+    "Always use page totals as the main figure for a page; property totals for KPIs.",
+    "Property, page and device totals are independent query-free grains. "
+    "Missing grains need a historical replay; they never fall back to query detail.",
     "GA4 total_users sums daily/page counts; it is not a deduplicated count "
     "of people across the window.",
     "Missing source/day data is unknown. Missing pages in an available GSC window count as zero "

@@ -15,22 +15,25 @@ from app.sync.common import (
     upsert_rows,
     validate_data_date,
 )
-from app.sync.gsc_client import PAGE_SIZE, GscQueryClient, GscRow
+from app.sync.gsc_client import DETAIL, GRAINS, PAGE_SIZE, GscQueryClient, GscRow
 
 
-def _map_row(domain: str, row: GscRow, start_date: date, end_date: date) -> dict:
+def _map_row(
+    domain: str, row: GscRow, start_date: date, end_date: date, dimensions: tuple[str, ...] = DETAIL
+) -> dict:
     keys = row["keys"]
-    if len(keys) != 4:
-        raise ValueError("Expected GSC row keys [date, page, query, device]")
-    data_date = date.fromisoformat(keys[0])
+    if len(keys) != len(dimensions):
+        raise ValueError("GSC row keys do not match requested dimensions")
+    values = dict(zip(dimensions, keys, strict=True))
+    data_date = date.fromisoformat(values["date"])
     validate_data_date(data_date, start_date, end_date, "GSC")
     return {
         "site": domain,
         "data_date": data_date,
-        "page": keys[1],
-        "query": keys[2],
-        "device": keys[3].upper(),
-        "country": "all",
+        "page": values.get("page", ""),
+        "query": values.get("query", ""),
+        "device": values.get("device", "").upper(),
+        "country": values.get("country", "all").lower(),
         "clicks": int(row["clicks"]),
         "impressions": int(row["impressions"]),
         "ctr": round_metric(row["ctr"]),
@@ -52,17 +55,25 @@ def sync_site(
     settings: Settings | None = None,
 ) -> int:
     def pull_chunk(db: Session, site_property: str, start: date, end: date) -> int:
-        start_row = 0
         count = 0
-        while True:
-            page = client.query(site_property, start, end, start_row, PAGE_SIZE)
-            upsert_batches(
-                db, page, lambda row: _map_row(site.domain, row, start, end), _upsert_rows
-            )
-            count += len(page)
-            if len(page) < PAGE_SIZE:
-                return count
-            start_row += PAGE_SIZE
+        # All grains share the chunk transaction and checkpoint. Never sum grains together.
+        for dimensions in GRAINS:
+            start_row = 0
+            while True:
+                page = client.query(
+                    site_property, start, end, start_row, PAGE_SIZE, dimensions=dimensions
+                )
+                upsert_batches(
+                    db,
+                    page,
+                    lambda row, dims=dimensions: _map_row(site.domain, row, start, end, dims),
+                    _upsert_rows,
+                )
+                count += len(page)
+                if len(page) < PAGE_SIZE:
+                    break
+                start_row += PAGE_SIZE
+        return count
 
     return run_sync(
         site,
