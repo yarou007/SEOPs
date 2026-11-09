@@ -21,6 +21,8 @@ def test_migration_round_trip_on_empty_schema():
         "alembic_version",
         "axis_snapshots",
         "gsc_index_status",
+        "weekly_reports",
+        "ahrefs_csv_rows",
     }
     assert set(inspect(engine).get_table_names()) == expected
     run_cli("alembic", "downgrade", "base")

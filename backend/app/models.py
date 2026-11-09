@@ -3,21 +3,29 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Numeric,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+
+
+def site_fk() -> ForeignKey:
+    """Every source row belongs to an existing site; domain renames cascade."""
+    return ForeignKey("sites.domain", onupdate="CASCADE", ondelete="RESTRICT")
 
 
 class User(Base):
@@ -70,7 +78,7 @@ class GscDaily(Base):
     )
 
     # Sync data is keyed by sites.domain, never the slug.
-    site: Mapped[str] = mapped_column(Text, primary_key=True)
+    site: Mapped[str] = mapped_column(Text, site_fk(), primary_key=True)
     data_date: Mapped[date] = mapped_column(Date, primary_key=True)
     page: Mapped[str] = mapped_column(Text, primary_key=True)
     query: Mapped[str] = mapped_column(Text, primary_key=True, server_default="", default="")
@@ -91,7 +99,7 @@ class GscSyncLog(Base):
     __tablename__ = "gsc_sync_log"
     __table_args__ = (CheckConstraint("status IN ('ok', 'error')", name="status"),)
 
-    site: Mapped[str] = mapped_column(Text, primary_key=True)
+    site: Mapped[str] = mapped_column(Text, site_fk(), primary_key=True)
     last_loaded_date: Mapped[date | None] = mapped_column(Date)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str | None] = mapped_column(Text)
@@ -103,7 +111,7 @@ class Ga4Daily(Base):
     __tablename__ = "ga4_daily"
     __table_args__ = (Index("ix_ga4_daily_site_page_path", "site", "page_path"),)
 
-    site: Mapped[str] = mapped_column(Text, primary_key=True)
+    site: Mapped[str] = mapped_column(Text, site_fk(), primary_key=True)
     data_date: Mapped[date] = mapped_column(Date, primary_key=True)
     page_path: Mapped[str] = mapped_column(Text, primary_key=True)
     sessions: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -118,7 +126,7 @@ class Ga4Daily(Base):
 class Ga4SyncLog(Base):
     __tablename__ = "ga4_sync_log"
 
-    site: Mapped[str] = mapped_column(Text, primary_key=True)
+    site: Mapped[str] = mapped_column(Text, site_fk(), primary_key=True)
     last_loaded_date: Mapped[date | None] = mapped_column(Date)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str | None] = mapped_column(Text)
@@ -136,7 +144,7 @@ class AxisSnapshot(Base):
     id: Mapped[UUID] = mapped_column(
         primary_key=True, default=uuid4, server_default=text("gen_random_uuid()")
     )
-    site: Mapped[str] = mapped_column(Text)
+    site: Mapped[str] = mapped_column(Text, site_fk())
     kind: Mapped[str] = mapped_column(Text)
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
@@ -149,12 +157,51 @@ class AxisSnapshot(Base):
 class GscIndexStatus(Base):
     __tablename__ = "gsc_index_status"
 
-    site: Mapped[str] = mapped_column(Text, primary_key=True)
+    site: Mapped[str] = mapped_column(Text, site_fk(), primary_key=True)
     url: Mapped[str] = mapped_column(Text, primary_key=True)
     verdict: Mapped[str | None] = mapped_column(Text)
     coverage_state: Mapped[str | None] = mapped_column(Text)
     indexing_state: Mapped[str | None] = mapped_column(Text)
     last_crawl_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     inspected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class WeeklyReport(Base):
+    """Stored weekly analysis; the JSON and Markdown files are only an export copy."""
+
+    __tablename__ = "weekly_reports"
+    __table_args__ = (
+        UniqueConstraint("site", "report_date", name="uq_weekly_reports_site_report_date"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid4, server_default=text("gen_random_uuid()")
+    )
+    site: Mapped[str] = mapped_column(Text, site_fk())
+    report_date: Mapped[date] = mapped_column(Date)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    report: Mapped[dict] = mapped_column(JSONB)
+    markdown: Mapped[str] = mapped_column(Text)
+
+
+class AhrefsCsvRow(Base):
+    """One raw row of an uploaded Ahrefs CSV, kept next to its processed snapshot."""
+
+    __tablename__ = "ahrefs_csv_rows"
+    __table_args__ = (Index("ix_ahrefs_csv_rows_site_kind", "site", "kind"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    snapshot_id: Mapped[UUID] = mapped_column(
+        ForeignKey("axis_snapshots.id", ondelete="CASCADE"), index=True
+    )
+    site: Mapped[str] = mapped_column(Text, site_fk())
+    kind: Mapped[str] = mapped_column(Text)
+    row_number: Mapped[int] = mapped_column(Integer)
+    data: Mapped[dict] = mapped_column(JSONB)
+    imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

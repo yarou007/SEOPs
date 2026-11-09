@@ -6,9 +6,10 @@ import re
 from collections import Counter
 from urllib.parse import urlsplit
 
+from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
-from app.models import AxisSnapshot, Site
+from app.models import AhrefsCsvRow, AxisSnapshot, Site
 
 
 def domain(url: str) -> str:
@@ -38,6 +39,7 @@ def import_csv(db: Session, site: Site, kind: str, text: str) -> AxisSnapshot:
                 return headers[_header(name)]
         raise ValueError("CSV is missing a required column: " + " / ".join(names))
 
+    raw_rows: list[dict] = []
     if kind == "internal-links":
         url_col = column("URL", "Page URL")
         inbound_col = column(
@@ -51,6 +53,7 @@ def import_csv(db: Session, site: Site, kind: str, text: str) -> AxisSnapshot:
         for index, row in enumerate(reader):
             if index >= 20_000:
                 raise ValueError("CSV must contain at most 20,000 rows")
+            raw_rows.append(row)
             url = (row.get(url_col) or "").strip()
             if domain(url) != site.domain.removeprefix("www."):
                 raise ValueError("Site Audit URLs must belong to this website")
@@ -96,6 +99,7 @@ def import_csv(db: Session, site: Site, kind: str, text: str) -> AxisSnapshot:
         for index, row in enumerate(reader):
             if index >= 20_000:
                 raise ValueError("CSV must contain at most 20,000 rows")
+            raw_rows.append(row)
             source, target = (
                 (row.get(source_col) or "").strip(),
                 (row.get(target_col) or "").strip(),
@@ -118,7 +122,23 @@ def import_csv(db: Session, site: Site, kind: str, text: str) -> AxisSnapshot:
         }
     else:
         raise ValueError("Unknown CSV kind")
+    # Persist pending site changes first: the snapshot references sites.domain.
+    db.flush()
     evidence = AxisSnapshot(site=site.domain, kind=kind, data=data)
     db.add(evidence)
     db.flush()
+    db.execute(
+        insert(AhrefsCsvRow),
+        [
+            {
+                "snapshot_id": evidence.id,
+                "site": site.domain,
+                "kind": kind,
+                "row_number": number,
+                # Keep every uploaded cell as text; extra unnamed cells go under "_extra".
+                "data": {("_extra" if key is None else key): value for key, value in row.items()},
+            }
+            for number, row in enumerate(raw_rows, start=1)
+        ],
+    )
     return evidence

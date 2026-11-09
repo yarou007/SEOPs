@@ -39,12 +39,97 @@ Setup and commands:
 | `main` | Stable baseline (pending merge of `feat/real-data-sync`) |
 | `feat/real-data-sync` | Real Google data, backfill, site onboarding, the first real site |
 | `feat/analysis-axes` | Eight analysis axes, GSC totals fix, Analysis tab (PR #1 into `feat/real-data-sync`) |
+| `feat/unified-database` | One database organized by website: foreign keys, per-site schemas, reports and raw Ahrefs rows stored in PostgreSQL |
 
 Work on a feature branch and open a pull request. Don't push straight to `main`.
 
+## Database
+
+All data for every website lives in **one PostgreSQL 16 database** (`seops`).
+Every row is linked to its website, and each website has its own folder (schema)
+you can open, browse and export.
+
+### How it is organized
+
+```
+seops
+└── Schemas
+    ├── public                        shared storage the app reads and writes
+    │   ├── sites, users, user_sites
+    │   ├── gsc_daily, gsc_sync_log   Search Console data and sync progress
+    │   ├── ga4_daily, ga4_sync_log   GA4 data and sync progress
+    │   ├── axis_snapshots            processed analysis evidence (OS, sitemaps, CSVs)
+    │   ├── gsc_index_status          URL inspection results
+    │   ├── weekly_reports            weekly analysis (JSON + readable Markdown)
+    │   └── ahrefs_csv_rows           every raw row of each uploaded Ahrefs CSV
+    └── <one schema per website>      e.g. dcemergencylockanddoor_com
+        └── Views: site_info, daily_totals, devices, countries, pages,
+                   pages_by_device, queries, ga4_pages, snapshots, index_status,
+                   weekly_reports, ahrefs_rows, sync_status
+```
+
+- **Linked by website.** Each data table's `site` column is a foreign key to
+  `sites.domain`. Data for an unknown website is rejected. Renaming a domain
+  updates every row. A website that still has data cannot be deleted.
+- **One folder per website.** The views in a website's schema show only that site's
+  rows. They are views, not copies, so they always show the latest data. A trigger on
+  `sites` creates, renames or removes these schemas automatically. To rebuild them by
+  hand, run `SELECT refresh_site_schemas();`.
+- **No double counting.** `gsc_daily` stores the same traffic at several levels (site,
+  page, device, country, query). Each view picks one level, so you can sum a view
+  safely. Don't sum `gsc_daily` directly.
+
+### How data gets updated
+
+Data changes only when a sync runs. Nothing is scheduled by default.
+
+| Source | How to update |
+|---|---|
+| Search Console, GA4 | Dashboard import button, or `python -m app.sync gsc --all` and `python -m app.sync ga4 --all` |
+| Weekly report | Saved after each dashboard import, or `python -m app.analysis weekly --all` |
+| Ahrefs | Upload a CSV in the dashboard |
+
+Syncs resume from the last loaded day and never create duplicates (rows are upserted).
+The newest `SYNC_LAG_DAYS` days (default 3) are skipped because Google still revises
+them. Report files written under `REPORTS_DIR` are an export copy; the database is the
+source. To import older report files once, run `python -m scripts.import_report_files`.
+
+### How to configure it
+
+1. **Start PostgreSQL 16.** Choose one:
+   - Docker: `cd backend && docker compose up -d --wait db` (port 5432).
+   - Any existing PostgreSQL 16 server.
+2. **Point the backend at it.** In `backend/.env`, set:
+   ```
+   DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:<port>/seops
+   TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:<port>/seops_test
+   ```
+   The user must be allowed to create schemas, because each website gets one. Keep
+   real passwords only in `.env`, which Git ignores.
+3. **Create the tables, triggers and website folders:**
+   ```sh
+   cd backend
+   alembic upgrade head
+   python -m scripts.seed
+   ```
+4. **Run the backend** (`uvicorn app.main:app`) and add websites from the dashboard.
+   Each new website gets its schema immediately.
+
+### Browse and export
+
+Connect any PostgreSQL client (for example DBeaver) with the values from
+`DATABASE_URL`. Then open `seops → Schemas → <website> → Views`. Right-click a view and
+choose **Export Data** for CSV or Excel. For a full backup, run
+`pg_dump -Fc seops > seops.dump`. To restore it, run
+`pg_restore -d <new database> seops.dump`.
+
+Migration `0005` refuses to run if any data row points to a domain that is missing
+from `sites`. It names the domains to fix. `alembic downgrade 0004` removes the website
+schemas and the two new tables, and keeps all Google data.
+
 ## Status
 
-- Verified with fixture data: 284 backend tests, 59 frontend unit tests, 3 browser tests.
+- Verified with fixture data: 291 backend tests, 59 frontend unit tests, 3 browser tests.
 - Real data: the test site `dcemergencylockanddoor.com` is connected. For 22 Sep–19 Oct 2026, Google shows 4 clicks and 2,519 impressions, and the dashboard matches after the totals fix.
 - Not yet verified: the full 16-month backfill for that site, and the sitemap and GA4 operating-system collections.
 - Arlington's seeded data is synthetic.

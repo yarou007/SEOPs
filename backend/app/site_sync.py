@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.analysis.weekly import build_report, write_report
+from app.analysis.weekly import build_report, save_report, write_report
 from app.config import Settings
 from app.db import SessionLocal
 from app.models import Site
@@ -90,7 +90,9 @@ def run_site_sync(site_id: UUID, jobs: SyncJobs, settings: Settings) -> None:
         if any(result.status == "ok" for result in results.values()):
             try:
                 with SessionLocal() as db:
-                    write_report(build_report(db, site), settings.reports_dir)
+                    report = build_report(db, site)
+                    save_report(db, report)
+                write_report(report, settings.reports_dir)
                 results["report"] = SyncResult(
                     status="ok", message="Weekly report updated from stored data."
                 )

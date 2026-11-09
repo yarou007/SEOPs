@@ -7,11 +7,13 @@ from pathlib import Path
 from statistics import median
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app import metrics
 from app.config import Settings, get_settings
-from app.models import Site
+from app.models import Site, WeeklyReport
 from app.sync.common import today_in
 
 ANALYSIS_THRESHOLDS = {
@@ -389,6 +391,31 @@ def render_markdown(report: dict) -> str:
         )
     lines.extend(["", "## Data notes", "", *[f"- {note}" for note in report["data_notes"]]])
     return "\n".join(lines) + "\n"
+
+
+def save_report(db: Session, report: dict) -> WeeklyReport:
+    """Store the report in the database (one per site and day; a rerun replaces it)."""
+    statement = (
+        pg_insert(WeeklyReport)
+        .values(
+            site=report["site"]["domain"],
+            report_date=date.fromisoformat(report["report_date"]),
+            report=report,
+            markdown=render_markdown(report),
+        )
+        .on_conflict_do_update(
+            constraint="uq_weekly_reports_site_report_date",
+            set_={
+                "report": report,
+                "markdown": render_markdown(report),
+                "generated_at": func.now(),
+            },
+        )
+        .returning(WeeklyReport)
+    )
+    stored = db.scalars(statement).one()
+    db.commit()
+    return stored
 
 
 def write_report(report: dict, reports_dir: Path) -> tuple[Path, Path]:

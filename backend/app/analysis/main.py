@@ -7,7 +7,9 @@ logger = logging.getLogger(__name__)
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="SEOPs local-data analysis")
     commands = parser.add_subparsers(dest="command", required=True)
-    weekly = commands.add_parser("weekly", help="Write a weekly SEO report as JSON and Markdown")
+    weekly = commands.add_parser(
+        "weekly", help="Save a weekly SEO report to the database (plus JSON and Markdown copies)"
+    )
     sites = weekly.add_mutually_exclusive_group(required=True)
     sites.add_argument("--site", metavar="SLUG")
     sites.add_argument("--all", action="store_true", help="Analyze all active sites")
@@ -16,7 +18,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from sqlalchemy import select
 
-    from app.analysis.weekly import build_report, write_report
+    from app.analysis.weekly import build_report, save_report, write_report
     from app.config import get_settings
     from app.db import SessionLocal
     from app.models import Site
@@ -38,9 +40,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             with SessionLocal() as db:
                 report = build_report(db, site, settings=settings)
+                save_report(db, report)
             json_path, md_path = write_report(report, settings.reports_dir)
             logger.info(
-                "%s: %d flagged pages; wrote %s and %s",
+                "%s: %d flagged pages; saved to the database and wrote %s and %s",
                 site.slug,
                 report["flagged_pages_count"],
                 json_path,

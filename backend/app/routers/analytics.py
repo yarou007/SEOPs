@@ -1,14 +1,14 @@
-import json
 from datetime import date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app import metrics
 from app.access import AccessibleSite
-from app.config import get_settings
 from app.db import DbSession
+from app.models import WeeklyReport
 
 router = APIRouter(prefix="/api/sites/{slug}", tags=["analytics"])
 Device = Literal["MOBILE", "DESKTOP", "TABLET"]
@@ -151,26 +151,13 @@ def status(site: AccessibleSite, db: DbSession) -> dict:
 
 
 @router.get("/report/latest", response_model=dict)
-def latest_report(site: AccessibleSite) -> dict:
-    root = get_settings().reports_dir.resolve()
-    directory = (root / site.slug).resolve()
-    missing = HTTPException(status_code=404, detail="Weekly report not found")
-    if directory.parent != root or not directory.is_dir():
-        raise missing
-    candidates = []
-    for path in directory.glob("????-??-??.json"):
-        try:
-            date.fromisoformat(path.stem)
-        except ValueError:
-            continue
-        if path.resolve().parent == directory:
-            candidates.append(path)
-    if not candidates:
-        raise missing
-    try:
-        report = json.loads(max(candidates, key=lambda path: path.stem).read_text(encoding="utf-8"))
-        if not isinstance(report, dict) or report.get("site", {}).get("slug") != site.slug:
-            raise ValueError("Report site mismatch")
-    except (OSError, ValueError, AttributeError):
-        raise HTTPException(status_code=503, detail="Stored weekly report is unavailable") from None
+def latest_report(site: AccessibleSite, db: DbSession) -> dict:
+    report = db.scalar(
+        select(WeeklyReport.report)
+        .where(WeeklyReport.site == site.domain)
+        .order_by(WeeklyReport.report_date.desc())
+        .limit(1)
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="Weekly report not found")
     return report

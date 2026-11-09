@@ -178,8 +178,39 @@ the GA4 `(site, page_path)` index. User/site UUIDs are generated with uuid4 in
 Python or `gen_random_uuid()` for direct SQL inserts.
 
 Daily metric and sync-log `site` columns hold **`sites.domain`, never the slug**.
-These remain text keys without foreign keys, as specified. Dates, numeric precision,
-nullability, and server defaults follow the requested schema. Models do not create tables.
+Since migration `0005` they are real foreign keys to `sites.domain`: a domain rename
+cascades to every row, and deleting a site that still has data is refused. Dates,
+numeric precision, nullability, and server defaults follow the requested schema.
+Models do not create tables.
+
+### One database, organized by website (`0005`)
+
+Everything collected for a website lives in the `seops` database:
+
+| Table (schema `public`) | Contents |
+|---|---|
+| `gsc_daily`, `gsc_sync_log` | Search Console rows (all grains) and sync checkpoints |
+| `ga4_daily`, `ga4_sync_log` | GA4 rows by page path and sync checkpoints |
+| `axis_snapshots`, `gsc_index_status` | Processed analysis evidence and URL inspections |
+| `weekly_reports` | Weekly analysis (JSON plus rendered Markdown); one per site and day |
+| `ahrefs_csv_rows` | Every raw row of each uploaded Ahrefs CSV, linked to its snapshot |
+
+Each website also gets **its own schema of read-only views**, named after its domain
+(`dcemergencylockanddoor.com` → `dcemergencylockanddoor_com`): `site_info`,
+`daily_totals`, `devices`, `countries`, `pages`, `pages_by_device`, `queries`,
+`ga4_pages`, `snapshots`, `index_status`, `weekly_reports`, `ahrefs_rows`, and
+`sync_status`. Each view already selects one GSC grain, so its rows can be summed
+without double counting. A trigger on `sites` rebuilds these schemas whenever a site
+is added, renamed, or removed (`SELECT refresh_site_schemas();` does it by hand).
+Only schemas whose comment is `seops site views (public)` are ever dropped.
+
+Weekly reports are saved to `weekly_reports`; `/report/latest` reads from there. The
+JSON/Markdown files in `REPORTS_DIR` are still written as an export copy. Import older
+report files once with `python -m scripts.import_report_files [DIR ...]` (defaults to
+`REPORTS_DIR`; rerunning replaces the same site and day).
+
+Browse or export with any PostgreSQL client (for example DBeaver): open
+`seops → Schemas → <site schema> → Views`, and use *Export Data* for CSV or Excel.
 
 `python -m scripts.seed` runs in one transaction and safely inserts missing records:
 

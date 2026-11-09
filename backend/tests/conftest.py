@@ -71,6 +71,12 @@ def migrated_schema():
     finally:
         engine.dispose()
         with admin_engine.connect() as connection:
+            # Per-site view schemas are siblings named "<SCHEMA>__<domain>".
+            for (name,) in connection.exec_driver_sql(
+                "SELECT nspname FROM pg_namespace WHERE starts_with(nspname, %s)",
+                (f"{SCHEMA}__",),
+            ):
+                connection.exec_driver_sql(f'DROP SCHEMA "{name}" CASCADE')
             connection.exec_driver_sql(f'DROP SCHEMA "{SCHEMA}" CASCADE')
         admin_engine.dispose()
 
@@ -80,7 +86,7 @@ def clean_database(migrated_schema):
     with engine.begin() as connection:
         connection.exec_driver_sql(
             "TRUNCATE axis_snapshots, gsc_index_status, user_sites, users, sites, "
-            "gsc_daily, gsc_sync_log, ga4_daily, ga4_sync_log"
+            "gsc_daily, gsc_sync_log, ga4_daily, ga4_sync_log, weekly_reports, ahrefs_csv_rows"
         )
 
 
