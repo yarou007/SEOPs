@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from app import google_admin
 from app.access import AccessibleSite
 from app.auth import CurrentUser, check_auth_origin
 from app.config import get_settings
@@ -217,3 +218,32 @@ def start_sync(
     background.add_task(run_site_sync, site.id, jobs, settings)
     response.headers["Cache-Control"] = "no-store"
     return job
+
+
+@router.get("/{slug}/connection/options")
+def connection_options(site: AccessibleSite, user: CurrentUser, response: Response) -> dict:
+    """Every property the service account can see (owner's decision: unfiltered for managers)."""
+    require_manager(site, user)
+    response.headers["Cache-Control"] = "no-store"
+    settings = get_settings()
+    return google_admin.options(
+        settings.gsc_service_account_file, settings.ga4_service_account_file
+    )
+
+
+@router.post("/{slug}/connection/test", dependencies=[Depends(check_auth_origin)])
+def connection_test(site: AccessibleSite, user: CurrentUser, response: Response) -> dict:
+    require_manager(site, user)
+    response.headers["Cache-Control"] = "no-store"
+    settings = get_settings()
+    result = {}
+    for source, saved, check, path in [
+        ("gsc", site.gsc_property, google_admin.test_gsc, settings.gsc_service_account_file),
+        ("ga4", site.ga4_property_id, google_admin.test_ga4, settings.ga4_service_account_file),
+    ]:
+        if not saved:
+            result[source] = {"ok": False, "message": "Not set up"}
+            continue
+        ok, message = check(path, saved)
+        result[source] = {"ok": ok, "message": message}
+    return result

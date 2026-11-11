@@ -80,6 +80,8 @@ def test_docs_list_foundation_and_analytics_routes(client):
         "/api/sites",
         "/api/sites/setup",
         "/api/sites/{slug}/connection",
+        "/api/sites/{slug}/connection/options",
+        "/api/sites/{slug}/connection/test",
         "/api/sites/{slug}/sync",
         "/api/sites/{slug}/summary",
         "/api/sites/{slug}/timeseries",
