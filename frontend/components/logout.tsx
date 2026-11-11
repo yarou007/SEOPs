@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-export function Logout() {
+export function Logout({ className = "" }: { className?: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -20,12 +20,16 @@ export function Logout() {
     }
   }
   return (
-    <div className="text-right">
-      <button className="button text-xs" onClick={logout} disabled={pending}>
+    <div>
+      <button
+        className={`button text-xs ${className}`}
+        onClick={logout}
+        disabled={pending}
+      >
         {pending ? "Signing out…" : "Log out"}
       </button>
       {error && (
-        <p role="alert" className="mt-1 text-xs text-bad">
+        <p role="alert" className="mt-1 text-xs text-bad-soft">
           {error}
         </p>
       )}

@@ -4,7 +4,6 @@ import {
   type AxisKey,
   type AxisResponse,
 } from "@/lib/analysis";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { serverApi, result } from "@/lib/server-api";
 import { pageOffset, PAGE_SIZE } from "@/lib/params";
@@ -27,16 +26,9 @@ import { StatusTable } from "@/components/status-table";
 import { WeeklyReport } from "@/components/weekly-report";
 import { InsightsPanel } from "@/components/insights-panel";
 import { EmptyState, ErrorState } from "@/components/states";
+import { PageHeader } from "@/components/ui/page-header";
+import { SECTIONS } from "@/lib/nav";
 
-const tabs = [
-  ["overview", "Overview"],
-  ["search", "Search"],
-  ["traffic", "Traffic"],
-  ["analysis", "Analysis"],
-  ["insights", "Insights"],
-  ["ahrefs", "Ahrefs"],
-  ["status", "Data status"],
-] as const;
 const gscColumns = [
   { key: "clicks", label: "Clicks", kind: "number", sortable: true },
   { key: "impressions", label: "Impressions", kind: "number", sortable: true },
@@ -324,64 +316,35 @@ export default async function SitePage({
     start: start ?? defaults.data.current_window.start,
     end: end ?? defaults.data.current_window.end,
   };
-  const tab = tabs.some(([key]) => key === scalar(query.tab))
-    ? scalar(query.tab)
+  const requested = scalar(query.tab) ?? "overview";
+  const tab = SECTIONS.some(
+    (item) => item.key === requested && item.key !== "setup",
+  )
+    ? requested
     : "overview";
-  const link = (tab: string) => {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      const item = scalar(value);
-      if (
-        item &&
-        !["pagesOffset", "queriesOffset", "trafficOffset"].includes(key)
-      )
-        params.set(key, item);
-    }
-    params.set("tab", tab);
-    return `/sites/${encodeURIComponent(slug)}?${params}`;
-  };
+  const section = SECTIONS.find((item) => item.key === tab) ?? SECTIONS[0];
   return (
     <div className="min-w-0">
-      <Link
-        className="mb-4 inline-block text-xs text-muted hover:text-accent"
-        href="/sites"
-      >
-        ← All sites
-      </Link>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-            {site.display_name}
-          </h1>
-          <p className="mt-1 break-all text-muted">{site.domain}</p>
-        </div>
-        <Link
-          href={`/sites/${encodeURIComponent(slug)}/settings`}
-          className="button"
-        >
-          Data connections
-        </Link>
-      </div>
-      <nav
-        aria-label="Site sections"
-        className="mb-6 flex max-w-full gap-5 overflow-x-auto border-b border-border"
-      >
-        {tabs.map(([key, label]) => (
-          <Link
-            key={key}
-            href={link(key)}
-            aria-current={tab === key ? "page" : undefined}
-            className={`whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-medium ${tab === key ? "border-accent text-accent" : "border-transparent text-muted hover:text-foreground"}`}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <DateControl
-        key={`${range.start}:${range.end}`}
-        range={range}
-        defaultEnd={defaults.data.current_window.end}
+      <PageHeader
+        title={tab === "overview" ? site.display_name : section.label}
+        description={
+          tab === "overview" ? (
+            <span className="break-all">{site.domain}</span>
+          ) : (
+            <>
+              {site.display_name}{" "}
+              <span className="break-all text-muted">({site.domain})</span>
+            </>
+          )
+        }
       />
+      {!["ahrefs", "status"].includes(tab) && (
+        <DateControl
+          key={`${range.start}:${range.end}`}
+          range={range}
+          defaultEnd={defaults.data.current_window.end}
+        />
+      )}
       {!selected.data ? (
         <ErrorState message={selected.error ?? "Could not load this range."} />
       ) : tab === "search" ? (

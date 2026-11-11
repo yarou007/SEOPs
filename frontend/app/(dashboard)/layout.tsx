@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { requireUser } from "@/lib/server-api";
-import { Logout } from "@/components/logout";
+import { Suspense } from "react";
+import { requireUser, result, serverApi } from "@/lib/server-api";
+import { Sidebar } from "@/components/shell/sidebar";
 
 export default async function DashboardLayout({
   children,
@@ -8,27 +8,18 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
+  const sites = await result((await serverApi()).sites());
   return (
-    <>
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-4 sm:px-8">
-          <Link className="text-xl font-bold tracking-tight" href="/sites">
-            SEOPs
-          </Link>
-          <div className="flex min-w-0 items-center gap-4">
-            <span className="hidden truncate text-xs text-muted sm:block">
-              {user.email} · {user.role}
-            </span>
-            <Logout />
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <Suspense>
+        <Sidebar sites={sites.data ?? []} user={user} />
+      </Suspense>
       <main
         id="main"
-        className="mx-auto max-w-[1440px] px-4 py-7 sm:px-8 sm:py-9"
+        className="mx-auto w-full min-w-0 max-w-[1280px] px-4 py-6 sm:px-8 sm:py-9"
       >
         {children}
       </main>
-    </>
+    </div>
   );
 }

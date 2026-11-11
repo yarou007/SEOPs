@@ -1,44 +1,60 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light dark;
-  --background: #f6f7f9;
+  color-scheme: light;
+  /* Paper pages, a navy "ink" sidebar, brass for the brand and the current place. */
+  --background: #f4f4f1;
   --surface: #ffffff;
-  --surface-muted: #f0f2f5;
-  --foreground: #18212f;
-  --muted: #5e6978;
-  --border: #dce1e8;
-  --accent: #2159c5;
-  --accent-soft: #edf3ff;
-  --good: #22684c;
-  --good-soft: #edf7f1;
-  --bad: #a62c35;
-  --bad-soft: #fff0f1;
-  --warning: #8b5b0d;
-  --warning-soft: #fff6df;
-  --chart-clicks: #2159c5;
-  --chart-impressions: #6d58aa;
-  --chart-sessions: #14806e;
+  --surface-muted: #efefeb;
+  --foreground: #1b2230;
+  --muted: #5a6371;
+  --border: #dddcd5;
+  --accent: #1f4fb8;
+  --accent-soft: #e9effb;
+  --brass: #9a6a1f;
+  --brass-soft: #f5ecda;
+  --ink: #16202e;
+  --ink-raised: #212d3e;
+  --ink-foreground: #eef1f5;
+  --ink-muted: #9aa5b5;
+  --good: #1d6b47;
+  --good-soft: #e7f4ec;
+  --bad: #a3303a;
+  --bad-soft: #fcecee;
+  --warning: #85570c;
+  --warning-soft: #fbf1dc;
+  --chart-clicks: #1f4fb8;
+  --chart-impressions: #7a5aa8;
+  --chart-sessions: #127566;
+  --radius: 10px;
+  --radius-small: 6px;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #11151c;
-    --surface: #191f29;
-    --surface-muted: #222b37;
-    --foreground: #e7edf6;
-    --muted: #a4afbf;
-    --border: #333d4c;
-    --accent: #95b7ff;
-    --accent-soft: #21314e;
-    --good: #a1ddbb;
-    --good-soft: #20382c;
-    --bad: #ffabb1;
-    --bad-soft: #3b242c;
-    --warning: #f0cc83;
-    --warning-soft: #3b3221;
-    --chart-clicks: #95b7ff;
-    --chart-impressions: #c2a7f4;
-    --chart-sessions: #77d5c3;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --background: #10141b;
+    --surface: #171d26;
+    --surface-muted: #202836;
+    --foreground: #e8edf4;
+    --muted: #a3adbc;
+    --border: #2e3846;
+    --accent: #93b4ff;
+    --accent-soft: #1f2e4b;
+    --brass: #e0b56a;
+    --brass-soft: #3a2f1c;
+    --ink: #0b0f15;
+    --ink-raised: #18202c;
+    --ink-foreground: #e8edf4;
+    --ink-muted: #8f9aab;
+    --good: #9fdcb9;
+    --good-soft: #1e3629;
+    --bad: #ffaab1;
+    --bad-soft: #3a232a;
+    --warning: #efc97f;
+    --warning-soft: #3a3120;
+    --chart-clicks: #93b4ff;
+    --chart-impressions: #c3a8f3;
+    --chart-sessions: #76d4c2;
   }
 }
 @theme inline {
@@ -56,6 +72,12 @@
   --color-bad-soft: var(--bad-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-brass: var(--brass);
+  --color-brass-soft: var(--brass-soft);
+  --color-ink: var(--ink);
+  --color-ink-raised: var(--ink-raised);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-ink-muted: var(--ink-muted);
 }
 * {
   box-sizing: border-box;
@@ -64,9 +86,10 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 button,
 input,
@@ -87,7 +110,7 @@ select {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--foreground);
-  border-radius: 5px;
+  border-radius: var(--radius-small);
   padding: 8px 10px;
 }
 :focus-visible {
@@ -99,7 +122,7 @@ input[type="date"] {
 }
 .panel {
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 .button {
@@ -110,9 +133,10 @@ input[type="date"] {
   gap: 6px;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 5px;
-  padding: 7px 13px;
+  border-radius: var(--radius-small);
+  padding: 7px 14px;
   font-weight: 600;
+  color: var(--foreground);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -128,11 +152,24 @@ input[type="date"] {
   background: var(--accent);
   opacity: 0.9;
 }
+.button-quiet {
+  border-color: transparent;
+  background: transparent;
+}
+textarea {
+  font: inherit;
+  color: var(--foreground);
+}
+/* Tabular figures everywhere numbers are compared. */
+.figure {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
 .table-wrap {
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 table {

@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { Public_Sans } from "next/font/google";
 import "./globals.css";
 
+const sans = Public_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: { default: "SEOPs", template: "%s · SEOPs" },
-  description: "SEO performance and weekly review",
+  title: { default: "SEOPs", template: "%s | SEOPs" },
+  description: "Search performance, traffic and advice for your websites",
 };
 export default function RootLayout({
   children,
@@ -11,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={sans.variable}>
       <body>
         <a
           href="#main"
