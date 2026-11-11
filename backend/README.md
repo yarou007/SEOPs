@@ -576,6 +576,31 @@ pytest tests/test_read_api.py tests/analysis
 pytest
 ```
 
+## AI insights
+
+Endpoints under `/api/sites/{slug}/insights` (all `no-store`; POST/PATCH check the origin):
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| GET | `/status` | linked users | `configured`, `model`, `used`, `budget`, `remaining`, `exhausted` |
+| GET | `/conversations`, `/conversations/{id}` | linked users | Chat history |
+| POST | `/ask` | creator or admin | `{question, conversation_id?, start?, end?}` → answer, suggested questions, insights |
+| GET | `/` | linked users | Insights, newest first (`status`, `source`, `limit`, `offset`) |
+| PATCH | `/{insight_id}` | creator or admin | `{status}` |
+| POST | `/weekly` | creator or admin | AI analysis of the latest stored weekly report |
+
+Errors: 503 means AI isn't configured, 429 means the daily limit is used up, 502 means
+the model failed or is busy, and 409 means no data is stored yet. Messages never include
+the key. Code is in `app/insights/`:
+- `context.py` builds the data summary.
+- `llm.py` handles the client, fallback, JSON validation and daily budget.
+- `prompts.py` holds the instructions and reply shapes.
+- `service.py` stores replies only after the LLM succeeds.
+
+Migration `0006` adds `ai_conversations`, `ai_messages`, `ai_insights`, `llm_usage`,
+`weekly_reports.ai_summary`, and the site views `ai_insights` and `ai_conversations`. Tests
+use a fake client and never call the network.
+
 ## Deferred work
 
 - Replace the four `TODO-site*.example` domains and set real display names,

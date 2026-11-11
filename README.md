@@ -10,7 +10,8 @@ This project does not change the websites themselves.
 - **GA4 sync:** daily sessions, users, conversions and engagement by page path. Same resumable pattern.
 - **Analysis axes:** eight protected views (see `docs/ANALYSIS_AXES.md`): impressions vs clicks, funnel, devices and OS, geography and zones, sitemaps, internal links, links between our sites, and search requests.
 - **Weekly analysis:** flags pages with high impressions and low CTR, mobile/desktop gaps, queries in positions 8–20, and clicks dropping, capped at three pages per site.
-- **Dashboard:** login, site list, Overview, Search, Traffic, Analysis, Ahrefs, Data status, weekly report. Light and dark mode, phone and desktop layouts.
+- **AI insights:** ask questions about a website's data in plain English, get answers that cite the stored figures plus better follow-up questions, and generate an AI analysis for the weekly report. Every piece of advice is stored as a structured insight (see [AI insights](#ai-insights)).
+- **Dashboard:** login, site list, Overview, Search, Traffic, Analysis, Insights, Ahrefs, Data status, weekly report. Light and dark mode, phone and desktop layouts.
 - **Website onboarding:** any signed-in user can add a website. Its creator and admins manage Google connections and start imports. Other linked users are read-only.
 
 ## Repository layout
@@ -40,6 +41,7 @@ Setup and commands:
 | `feat/real-data-sync` | Real Google data, backfill, site onboarding, the first real site |
 | `feat/analysis-axes` | Eight analysis axes, GSC totals fix, Analysis tab (PR #1 into `feat/real-data-sync`) |
 | `feat/unified-database` | One database organized by website: foreign keys, per-site schemas, reports and raw Ahrefs rows stored in PostgreSQL |
+| `feat/ai-insights` | AI chat, weekly AI analysis and stored insights over each site's data (built on `feat/unified-database`) |
 
 Work on a feature branch and open a pull request. Don't push straight to `main`.
 
@@ -60,12 +62,16 @@ seops
     │   ├── ga4_daily, ga4_sync_log   GA4 data and sync progress
     │   ├── axis_snapshots            processed analysis evidence (OS, sitemaps, CSVs)
     │   ├── gsc_index_status          URL inspection results
-    │   ├── weekly_reports            weekly analysis (JSON + readable Markdown)
-    │   └── ahrefs_csv_rows           every raw row of each uploaded Ahrefs CSV
+    │   ├── weekly_reports            weekly analysis (JSON + Markdown + AI summary)
+    │   ├── ahrefs_csv_rows           every raw row of each uploaded Ahrefs CSV
+    │   ├── ai_conversations, ai_messages   AI chat history
+    │   ├── ai_insights               structured AI advice (problem, evidence, advice, KPI)
+    │   └── llm_usage                 AI requests used per UTC day
     └── <one schema per website>      e.g. dcemergencylockanddoor_com
         └── Views: site_info, daily_totals, devices, countries, pages,
                    pages_by_device, queries, ga4_pages, snapshots, index_status,
-                   weekly_reports, ahrefs_rows, sync_status
+                   weekly_reports, ahrefs_rows, sync_status,
+                   ai_insights, ai_conversations
 ```
 
 - **Linked by website.** Each data table's `site` column is a foreign key to
@@ -127,9 +133,56 @@ Migration `0005` refuses to run if any data row points to a domain that is missi
 from `sites`. It names the domains to fix. `alembic downgrade 0004` removes the website
 schemas and the two new tables, and keeps all Google data.
 
+## AI insights
+
+An LLM reads a compact summary of one website's stored data and answers in English. It
+never queries the database or Google directly. The backend sends it: 28-day totals
+against the previous 28 days, daily totals, the top 25 pages and queries, devices,
+countries, the weekly report's flags, sync status and the data notes. It is told to use
+only these figures.
+
+- **Insights tab** (on each website): ask a question, read the answer, and click one of
+  the 2–3 suggested follow-up questions. Insights from answers appear on the right, with
+  priority, target page, KPI and evidence. Managers can accept, dismiss or close them.
+- **Weekly report:** an **AI analysis** section with a short summary and up to 5
+  insights. Generate it with the button, or with
+  `python -m app.analysis weekly --all --with-ai`. It never runs on its own, to save the
+  daily quota.
+- **Stored for later use:** every insight is a row in `ai_insights`, also shown as the
+  view `<site_schema>.ai_insights`. Each row has `problem`, `evidence` (metric, value,
+  period, `grounded`), `advice`, `target_url`, `target_kpi`, `priority` and `status`
+  (`new`, `accepted`, `dismissed`, `done`). A future agent can turn accepted insights
+  into website changes.
+- **Checked figures:** each evidence value is compared with the data that was sent to the
+  AI. A value that doesn't match is stored with `grounded: false` and shown as
+  **unverified**.
+- **Who can do what:** the website's creator and admins can ask questions and generate
+  analyses. Other linked users can read everything.
+
+### Configuration (`backend/.env`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OPENROUTER_API_KEY` | empty | OpenRouter key. Empty disables AI; the UI shows "AI not configured". |
+| `LLM_MODEL` | `nvidia/nemotron-3.5-super-vl:free` | Main model (any OpenRouter model ID) |
+| `LLM_FALLBACK_MODELS` | `google/gemma-4-31b-it:free` | Comma-separated; the first one is tried if the main model fails |
+| `LLM_REASONING_EFFORT` | `low` | `low`/`medium`/`high`, or empty to omit (reasoning models) |
+| `LLM_MAX_TOKENS` | `8000` | Max reply tokens, including reasoning |
+| `LLM_TIMEOUT_SECONDS` | `120` | Per request |
+| `LLM_DAILY_REQUEST_BUDGET` | `45` | Requests per UTC day, counted before each call (retries and fallbacks count) |
+| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | Any OpenAI-compatible API |
+
+Free OpenRouter keys allow 50 free-model requests per day; $10 of credit raises that to
+1,000. Free models are often busy (HTTP 429 or 503). The app then tries the fallback
+model and shows "The AI could not answer right now", so you can retry a minute later.
+Only OpenRouter's per-day limit marks the day as used up. Answers take 1–2 minutes on
+free models, and the Next.js proxy allows 180 seconds. On free tiers, prompts may be used
+by the model provider. The data sent is aggregated SEO metrics, not credentials.
+
 ## Status
 
-- Verified with fixture data: 291 backend tests, 59 frontend unit tests, 3 browser tests.
+- Verified with fixture data: 337 backend tests, 66 frontend unit tests, 3 browser tests.
+- AI insights verified live on 2026-11-11 for `dcemergencylockanddoor.com`: one weekly analysis (5 insights) and one chat answer (5 insights), with every evidence value grounded.
 - Real data: the test site `dcemergencylockanddoor.com` is connected. For 22 Sep–19 Oct 2026, Google shows 4 clicks and 2,519 impressions, and the dashboard matches after the totals fix.
 - Not yet verified: the full 16-month backfill for that site, and the sitemap and GA4 operating-system collections.
 - Arlington's seeded data is synthetic.
