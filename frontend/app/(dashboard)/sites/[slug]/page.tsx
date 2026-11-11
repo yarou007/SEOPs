@@ -30,6 +30,8 @@ import { AiAdvice } from "@/components/overview/ai-advice";
 import { InsightsPanel } from "@/components/insights-panel";
 import { EmptyState, ErrorState } from "@/components/states";
 import { PageHeader } from "@/components/ui/page-header";
+import { AhrefsImport } from "@/components/ahrefs/import-card";
+import { WebAnalyticsView } from "@/components/ahrefs/web-analytics-view";
 import { SECTIONS } from "@/lib/nav";
 
 const gscColumns = [
@@ -100,6 +102,24 @@ async function InsightsTab({
       initialConversations={conversations.data}
       initialInsights={insights.data}
     />
+  );
+}
+
+async function AhrefsTab({ slug, domain }: { slug: string; domain: string }) {
+  const api = await serverApi();
+  const [manage, data] = await Promise.all([
+    canManage(slug),
+    result(api.ahrefs(slug)),
+  ]);
+  return (
+    <div className="space-y-6">
+      {manage && <AhrefsImport slug={slug} />}
+      {data.data ? (
+        <WebAnalyticsView data={data.data} domain={domain} />
+      ) : (
+        <ErrorState message={data.error ?? "Could not load Ahrefs data."} />
+      )}
+    </div>
   );
 }
 
@@ -373,12 +393,7 @@ export default async function SitePage({
       ) : tab === "insights" ? (
         <InsightsTab slug={slug} range={selected.data.current_window} />
       ) : tab === "ahrefs" ? (
-        <section className="panel p-6">
-          <h2 className="text-lg font-semibold">Ahrefs</h2>
-          <p className="mt-2 text-muted">
-            Ahrefs data is entered manually and will be added in a later step.
-          </p>
-        </section>
+        <AhrefsTab slug={slug} domain={site.domain} />
       ) : tab === "status" ? (
         <StatusTable status={status.data} />
       ) : (
