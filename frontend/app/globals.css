@@ -79,156 +79,159 @@
   --color-ink-foreground: var(--ink-foreground);
   --color-ink-muted: var(--ink-muted);
 }
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-}
-button,
-input,
-select {
-  font: inherit;
-}
-button,
-select {
-  cursor: pointer;
-}
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-input,
-select {
-  min-width: 0;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--foreground);
-  border-radius: var(--radius-small);
-  padding: 8px 10px;
-}
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-input[type="date"] {
-  width: 100%;
-}
-.panel {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  gap: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: var(--radius-small);
-  padding: 7px 14px;
-  font-weight: 600;
-  color: var(--foreground);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.button:hover {
-  background: var(--surface-muted);
-}
-.button-primary {
-  color: var(--surface);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.button-primary:hover {
-  background: var(--accent);
-  opacity: 0.9;
-}
-.button-quiet {
-  border-color: transparent;
-  background: transparent;
-}
-textarea {
-  font: inherit;
-  color: var(--foreground);
-}
-/* Tabular figures everywhere numbers are compared. */
-.figure {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-.table-wrap {
-  max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 13px;
-}
-th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-weight: 600;
-  text-align: left;
-  white-space: nowrap;
-}
-th,
-td {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-tbody tr:hover {
-  background: var(--surface-muted);
-}
-.numeric {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 4px;
-  padding: 2px 7px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.badge-good {
-  background: var(--good-soft);
-  color: var(--good);
-}
-.badge-bad {
-  background: var(--bad-soft);
-  color: var(--bad);
-}
-.badge-muted {
-  background: var(--surface-muted);
-  color: var(--muted);
-}
-.badge-warning {
-  background: var(--warning-soft);
-  color: var(--warning);
+/* Layered so Tailwind utilities on an element always win over these defaults. */
+@layer components {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+  button,
+  select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  input,
+  select {
+    min-width: 0;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--foreground);
+    border-radius: var(--radius-small);
+    padding: 8px 10px;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  input[type="date"] {
+    width: 100%;
+  }
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: var(--radius-small);
+    padding: 7px 14px;
+    font-weight: 600;
+    color: var(--foreground);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .button:hover {
+    background: var(--surface-muted);
+  }
+  .button-primary {
+    color: var(--surface);
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .button-primary:hover {
+    background: var(--accent);
+    opacity: 0.9;
+  }
+  .button-quiet {
+    border-color: transparent;
+    background: transparent;
+  }
+  textarea {
+    font: inherit;
+    color: var(--foreground);
+  }
+  /* Tabular figures everywhere numbers are compared. */
+  .figure {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+  }
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-muted);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+  }
+  th,
+  td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  tbody tr:hover {
+    background: var(--surface-muted);
+  }
+  .numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-good {
+    background: var(--good-soft);
+    color: var(--good);
+  }
+  .badge-bad {
+    background: var(--bad-soft);
+    color: var(--bad);
+  }
+  .badge-muted {
+    background: var(--surface-muted);
+    color: var(--muted);
+  }
+  .badge-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,
