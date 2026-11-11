@@ -29,8 +29,11 @@ SITE_DATA_TABLES = [
 MARKER = "seops site views"
 
 
-def _site_views(base: str) -> str:
-    """Per-site view definitions; %1$I is the site schema, %2$L the domain literal."""
+def _site_views(base: str, extra_views: dict[str, str] | None = None) -> str:
+    """Per-site view definitions; %1$I is the site schema, %2$L the domain literal.
+
+    Later migrations pass ``extra_views`` (same placeholders) to add views.
+    """
     b = f'"{base}"'
     views = {
         "site_info": f"SELECT * FROM {b}.sites WHERE domain = %2$L",
@@ -90,6 +93,7 @@ def _site_views(base: str) -> str:
             f"error FROM {b}.ga4_sync_log WHERE site = %2$L"
         ),
     }
+    views.update(extra_views or {})
     return "\n".join(
         f"    EXECUTE format('CREATE VIEW %1$I.{name} AS {sql.replace(chr(39), chr(39) * 2)}', "
         "target, site_row.domain);"
@@ -97,7 +101,7 @@ def _site_views(base: str) -> str:
     )
 
 
-def _refresh_function(base: str) -> str:
+def _refresh_function(base: str, extra_views: dict[str, str] | None = None) -> str:
     # Site schemas use the bare domain in the default "public" schema, and are
     # prefixed with the base schema anywhere else (isolated test schemas).
     prefix = "" if base == "public" else f"{base}__"
@@ -133,7 +137,7 @@ BEGIN
         END IF;
         EXECUTE format('CREATE SCHEMA %I', target);
         EXECUTE format('COMMENT ON SCHEMA %I IS %L', target, '{MARKER} ({base})');
-{_site_views(base)}
+{_site_views(base, extra_views)}
     END LOOP;
 END
 $fn$;

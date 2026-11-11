@@ -23,6 +23,10 @@ def test_migration_round_trip_on_empty_schema():
         "gsc_index_status",
         "weekly_reports",
         "ahrefs_csv_rows",
+        "ai_conversations",
+        "ai_messages",
+        "ai_insights",
+        "llm_usage",
     }
     assert set(inspect(engine).get_table_names()) == expected
     run_cli("alembic", "downgrade", "base")

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -186,6 +187,7 @@ class WeeklyReport(Base):
     )
     report: Mapped[dict] = mapped_column(JSONB)
     markdown: Mapped[str] = mapped_column(Text)
+    ai_summary: Mapped[str | None] = mapped_column(Text)
 
 
 class AhrefsCsvRow(Base):
@@ -204,4 +206,94 @@ class AhrefsCsvRow(Base):
     data: Mapped[dict] = mapped_column(JSONB)
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class AiConversation(Base):
+    __tablename__ = "ai_conversations"
+
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid4, server_default=text("gen_random_uuid()")
+    )
+    site: Mapped[str] = mapped_column(Text, site_fk())
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    title: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class AiMessage(Base):
+    __tablename__ = "ai_messages"
+    __table_args__ = (CheckConstraint("role IN ('user', 'assistant')", name="role"),)
+
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid4, server_default=text("gen_random_uuid()")
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        ForeignKey("ai_conversations.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text)
+    suggested_questions: Mapped[list] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    context_summary: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
+    model: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class AiInsight(Base):
+    """One structured piece of advice, readable by people now and a PR agent later."""
+
+    __tablename__ = "ai_insights"
+    __table_args__ = (
+        CheckConstraint("source IN ('weekly', 'chat')", name="source"),
+        CheckConstraint("priority IN ('high', 'medium', 'low')", name="priority"),
+        CheckConstraint("status IN ('new', 'accepted', 'dismissed', 'done')", name="status"),
+        Index("ix_ai_insights_site_status", "site", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid4, server_default=text("gen_random_uuid()")
+    )
+    site: Mapped[str] = mapped_column(Text, site_fk())
+    source: Mapped[str] = mapped_column(Text)
+    report_date: Mapped[date | None] = mapped_column(Date)
+    message_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("ai_messages.id", ondelete="SET NULL")
+    )
+    title: Mapped[str] = mapped_column(Text)
+    problem: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[list] = mapped_column(JSONB)
+    advice: Mapped[str] = mapped_column(Text)
+    target_url: Mapped[str | None] = mapped_column(Text)
+    target_kpi: Mapped[str] = mapped_column(Text)
+    priority: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default="new", server_default="new")
+    model: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), onupdate=func.now()
+    )
+
+
+class LlmUsage(Base):
+    """Requests per UTC day; the free quota is per account, so the day is the key."""
+
+    __tablename__ = "llm_usage"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    requests: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    quota_exhausted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
     )

@@ -72,6 +72,8 @@ def test_each_site_gets_its_own_schema_of_views(db, seeded):
         "ahrefs_rows",
         "snapshots",
         "sync_status",
+        "ai_insights",
+        "ai_conversations",
     } <= views
 
 
@@ -176,3 +178,33 @@ def test_report_files_import_into_database(db, seeded, tmp_path):
     stored = db.scalars(select(WeeklyReport)).one()
     assert stored.site == DOMAIN
     assert stored.report_date.isoformat() == report["report_date"]
+
+
+def insight(site=DOMAIN, **extra):
+    from app.models import AiInsight
+
+    return AiInsight(
+        site=site,
+        source="chat",
+        title="Low CTR",
+        problem="Page ranks but is not clicked",
+        evidence=[{"metric": "ctr", "value": "0.16", "period": "28d"}],
+        advice="Rewrite the title",
+        target_kpi="ctr",
+        priority="high",
+        model="fake",
+        **extra,
+    )
+
+
+def test_ai_insight_requires_known_site(db, seeded):
+    db.add(insight(site="nope.example"))
+    with pytest.raises(IntegrityError, match="fk_ai_insights_site_sites"):
+        db.commit()
+
+
+def test_ai_insights_view_shows_site_rows(db, seeded):
+    db.add_all([insight(), insight(site="TODO-site2.example")])
+    db.commit()
+    rows = db.execute(text(f'SELECT title, status FROM "{SITE_SCHEMA}".ai_insights')).all()
+    assert rows == [("Low CTR", "new")]
