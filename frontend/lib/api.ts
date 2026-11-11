@@ -11,6 +11,14 @@ import type {
   Summary,
   User,
   WeeklyReport,
+  AiInsight,
+  AskInput,
+  AskResponse,
+  Conversation,
+  ConversationSummary,
+  InsightStatus,
+  UsageInfo,
+  WeeklyAiResponse,
   ConnectionInput,
   CreateSiteInput,
   SetupInfo,
@@ -27,6 +35,8 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+// AI answers can take minutes on free models; the Next.js proxy allows 180 s too.
+const AI_TIMEOUT_MS = 180_000;
 export type Transport = (path: string, init: RequestInit) => Promise<Response>;
 type Params = Record<string, string | number | undefined>;
 
@@ -56,6 +66,7 @@ export function createApi(transport: Transport = fetch) {
     path: string,
     init: RequestInit = {},
     params: Params = {},
+    timeoutMs = 20_000,
   ): Promise<T> {
     if (!path.startsWith("/api/"))
       throw new Error("API paths must be relative /api/ URLs");
@@ -68,7 +79,7 @@ export function createApi(transport: Transport = fetch) {
         ...init,
         cache: "no-store",
         credentials: "include",
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
       throw new ApiError(503, "Could not reach the API. Please try again.");
@@ -172,6 +183,48 @@ export function createApi(transport: Transport = fetch) {
       }),
     report: (slug: string) =>
       request<WeeklyReport>(`${sitePath(slug)}/report/latest`),
+    insightsStatus: (slug: string) =>
+      request<UsageInfo>(`${sitePath(slug)}/insights/status`),
+    conversations: (slug: string) =>
+      request<ConversationSummary[]>(
+        `${sitePath(slug)}/insights/conversations`,
+      ),
+    conversation: (slug: string, id: string) =>
+      request<Conversation>(
+        `${sitePath(slug)}/insights/conversations/${encodeURIComponent(id)}`,
+      ),
+    ask: (slug: string, payload: AskInput) =>
+      request<AskResponse>(
+        `${sitePath(slug)}/insights/ask`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        {},
+        AI_TIMEOUT_MS,
+      ),
+    insights: (
+      slug: string,
+      filters: { status?: InsightStatus; source?: "weekly" | "chat" } = {},
+    ) =>
+      request<AiInsight[]>(`${sitePath(slug)}/insights/`, {}, { ...filters }),
+    updateInsight: (slug: string, id: string, status: InsightStatus) =>
+      request<AiInsight>(
+        `${sitePath(slug)}/insights/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        },
+      ),
+    generateWeekly: (slug: string) =>
+      request<WeeklyAiResponse>(
+        `${sitePath(slug)}/insights/weekly`,
+        { method: "POST" },
+        {},
+        AI_TIMEOUT_MS,
+      ),
   };
 }
 export const api = createApi();

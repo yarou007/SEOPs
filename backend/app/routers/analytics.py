@@ -152,12 +152,12 @@ def status(site: AccessibleSite, db: DbSession) -> dict:
 
 @router.get("/report/latest", response_model=dict)
 def latest_report(site: AccessibleSite, db: DbSession) -> dict:
-    report = db.scalar(
-        select(WeeklyReport.report)
+    stored = db.scalar(
+        select(WeeklyReport)
         .where(WeeklyReport.site == site.domain)
         .order_by(WeeklyReport.report_date.desc())
         .limit(1)
     )
-    if report is None:
+    if stored is None:
         raise HTTPException(status_code=404, detail="Weekly report not found")
-    return report
+    return {**stored.report, "ai_summary": stored.ai_summary}

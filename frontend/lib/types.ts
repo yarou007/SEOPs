@@ -123,9 +123,78 @@ export interface WeeklyReport {
   device_split: Record<"MOBILE" | "DESKTOP", GscMetrics | null>;
   query_candidates: QueryCandidate[];
   data_notes: string[];
+  ai_summary?: string | null;
 }
 export interface Result<T> {
   data: T | null;
   error: string | null;
   status?: number;
+}
+
+export interface UsageInfo {
+  configured: boolean;
+  model: string;
+  used: number;
+  budget: number;
+  remaining: number;
+  exhausted: boolean;
+}
+export interface AiMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  suggested_questions: string[];
+  model: string | null;
+  created_at: string;
+}
+export type InsightStatus = "new" | "accepted" | "dismissed" | "done";
+export interface AiEvidence {
+  metric: string;
+  value: string | number;
+  period: string;
+  grounded: boolean;
+}
+export interface AiInsight {
+  id: string;
+  source: "weekly" | "chat";
+  report_date: string | null;
+  message_id: string | null;
+  title: string;
+  problem: string;
+  evidence: AiEvidence[];
+  advice: string;
+  target_url: string | null;
+  target_kpi: string;
+  priority: "high" | "medium" | "low";
+  status: InsightStatus;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  last_message_at: string | null;
+}
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: AiMessage[];
+}
+export interface AskInput {
+  question: string;
+  conversation_id?: string;
+  start?: string;
+  end?: string;
+}
+export interface AskResponse {
+  conversation_id: string;
+  message: AiMessage;
+  insights: AiInsight[];
+}
+export interface WeeklyAiResponse {
+  report_date: string;
+  ai_summary: string | null;
+  insights: AiInsight[];
 }

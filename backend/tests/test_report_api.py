@@ -64,3 +64,13 @@ def test_report_of_another_site_is_not_returned(client, login_as, db):
     save_report(db, report(db, "2026-10-19", slug="site2"))
     assert client.get("/api/sites/arlington/report/latest").status_code == 404
     assert db.scalar(select(func.count()).select_from(WeeklyReport)) == 1
+
+
+def test_latest_report_includes_ai_summary(client, login_as, store, db):
+    login_as()
+    store("2026-10-19")
+    assert client.get("/api/sites/arlington/report/latest").json()["ai_summary"] is None
+    row = db.scalars(select(WeeklyReport)).one()
+    row.ai_summary = "## Summary"
+    db.commit()
+    assert client.get("/api/sites/arlington/report/latest").json()["ai_summary"] == "## Summary"
