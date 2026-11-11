@@ -74,6 +74,7 @@ def test_each_site_gets_its_own_schema_of_views(db, seeded):
         "sync_status",
         "ai_insights",
         "ai_conversations",
+        "ahrefs_web_analytics",
     } <= views
 
 
@@ -208,3 +209,36 @@ def test_ai_insights_view_shows_site_rows(db, seeded):
     db.commit()
     rows = db.execute(text(f'SELECT title, status FROM "{SITE_SCHEMA}".ai_insights')).all()
     assert rows == [("Low CTR", "new")]
+
+
+def test_ahrefs_web_analytics_view_shows_site_rows(db, seeded):
+    from app.analysis.web_analytics import WebAnalyticsFile, import_web_analytics
+
+    channels = (
+        '"Channel"\t"Visitors"\t"Bounce rate"\t"Visit duration"\n"Direct"\t"26"\t"0.5"\t"239"\n'
+    )
+    site = db.scalar(select(Site).where(Site.domain == DOMAIN))
+    import_web_analytics(
+        db,
+        site,
+        date(2026, 10, 13),
+        date(2026, 11, 11),
+        [WebAnalyticsFile(name="Channel.csv", content=channels)],
+    )
+    db.commit()
+    rows = db.execute(
+        text(f'SELECT report, item, visitors FROM "{SITE_SCHEMA}".ahrefs_web_analytics')
+    ).all()
+    assert rows == [("channels", "Direct", 26)]
+    others = db.scalars(
+        text(
+            "SELECT table_schema FROM information_schema.views "
+            "WHERE table_name = 'ahrefs_web_analytics' AND starts_with(table_schema, :p)"
+        ),
+        {"p": f"{SCHEMA}__"},
+    ).all()
+    assert len(others) == db.query(Site).count()
+    for schema in set(others) - {SITE_SCHEMA}:
+        assert (
+            db.execute(text(f'SELECT count(*) FROM "{schema}".ahrefs_web_analytics')).scalar() == 0
+        )

@@ -87,6 +87,7 @@ def clean_database(migrated_schema):
         connection.exec_driver_sql(
             "TRUNCATE axis_snapshots, gsc_index_status, user_sites, users, sites, "
             "gsc_daily, gsc_sync_log, ga4_daily, ga4_sync_log, weekly_reports, ahrefs_csv_rows, "
+            "ahrefs_web_analytics, "
             "ai_insights, ai_messages, ai_conversations, llm_usage"
         )
 

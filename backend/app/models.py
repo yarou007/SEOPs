@@ -209,6 +209,38 @@ class AhrefsCsvRow(Base):
     )
 
 
+class AhrefsWebAnalytics(Base):
+    """One parsed row of an Ahrefs Web Analytics export (typed, for analysis over time)."""
+
+    __tablename__ = "ahrefs_web_analytics"
+    __table_args__ = (
+        Index("ix_ahrefs_web_analytics_site_report_end", "site", "report", "period_end"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    snapshot_id: Mapped[UUID] = mapped_column(
+        ForeignKey("axis_snapshots.id", ondelete="CASCADE"), index=True
+    )
+    site: Mapped[str] = mapped_column(Text, site_fk())
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    report: Mapped[str] = mapped_column(Text)
+    item: Mapped[str] = mapped_column(Text)
+    visitors: Mapped[int | None] = mapped_column(Integer)
+    views: Mapped[int | None] = mapped_column(Integer)
+    entrances: Mapped[int | None] = mapped_column(Integer)
+    exits: Mapped[int | None] = mapped_column(Integer)
+    count: Mapped[int | None] = mapped_column(Integer)
+    exit_rate: Mapped[Decimal | None] = mapped_column(Numeric)
+    bounce_rate: Mapped[Decimal | None] = mapped_column(Numeric)
+    visit_duration: Mapped[Decimal | None] = mapped_column(Numeric)
+    time_on_page: Mapped[Decimal | None] = mapped_column(Numeric)
+    conversion_rate: Mapped[Decimal | None] = mapped_column(Numeric)
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
 class AiConversation(Base):
     __tablename__ = "ai_conversations"
 

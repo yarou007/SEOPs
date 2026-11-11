@@ -23,6 +23,7 @@ def test_migration_round_trip_on_empty_schema():
         "gsc_index_status",
         "weekly_reports",
         "ahrefs_csv_rows",
+        "ahrefs_web_analytics",
         "ai_conversations",
         "ai_messages",
         "ai_insights",
