@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createApi } from "../lib/api";
-import { STARTER_QUESTIONS, quotaLabel, sortInsights } from "../lib/insights";
+import {
+  STARTER_QUESTIONS,
+  filterInsights,
+  quotaLabel,
+  quotaPercent,
+  sortInsights,
+} from "../lib/insights";
 import type { AiInsight, UsageInfo } from "../lib/types";
 
 const usage = (over: Partial<UsageInfo> = {}): UsageInfo => ({
@@ -115,5 +121,36 @@ describe("insights API", () => {
     await api.updateInsight("s", "i1", "done");
     expect(calls[0][0]).toBe("/api/sites/s/insights/i1");
     expect(calls[0][1].method).toBe("PATCH");
+  });
+});
+
+describe("filterInsights", () => {
+  const items = [
+    { ...insight("a", "low", "2026-11-01"), status: "new" as const },
+    { ...insight("b", "high", "2026-11-02"), status: "accepted" as const },
+    { ...insight("c", "high", "2026-11-03"), status: "done" as const },
+    { ...insight("d", "medium", "2026-11-04"), status: "dismissed" as const },
+  ];
+  it("keeps open advice (new or accepted) by default order of priority", () => {
+    expect(filterInsights(items, "open", "all").map((item) => item.id)).toEqual(
+      ["b", "a"],
+    );
+  });
+  it("filters by status and priority", () => {
+    expect(filterInsights(items, "done", "all").map((item) => item.id)).toEqual(
+      ["c"],
+    );
+    expect(filterInsights(items, "all", "high").map((item) => item.id)).toEqual(
+      ["c", "b"],
+    );
+    expect(filterInsights(items, "open", "medium")).toEqual([]);
+  });
+});
+
+describe("quotaPercent", () => {
+  it("shows the share used", () => {
+    expect(quotaPercent(usage({ used: 9, budget: 45 }))).toBe(20);
+    expect(quotaPercent(usage({ budget: 0 }))).toBe(0);
+    expect(quotaPercent(usage({ exhausted: true }))).toBe(100);
   });
 });

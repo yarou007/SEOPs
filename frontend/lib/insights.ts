@@ -25,3 +25,30 @@ export function sortInsights(insights: AiInsight[]): AiInsight[] {
       b.created_at.localeCompare(a.created_at),
   );
 }
+
+export type StatusFilter = "open" | "all" | "done" | "dismissed";
+export type PriorityFilter = "all" | AiInsight["priority"];
+
+export function filterInsights(
+  insights: AiInsight[],
+  status: StatusFilter,
+  priority: PriorityFilter,
+): AiInsight[] {
+  return sortInsights(
+    insights.filter(
+      (item) =>
+        (status === "all" ||
+          (status === "open"
+            ? item.status === "new" || item.status === "accepted"
+            : item.status === status)) &&
+        (priority === "all" || item.priority === priority),
+    ),
+  );
+}
+
+/** Share of today's AI requests already used, 0 to 100. */
+export function quotaPercent(usage: UsageInfo): number {
+  if (usage.exhausted) return 100;
+  if (usage.budget <= 0) return 0;
+  return Math.min(100, Math.round((usage.used / usage.budget) * 100));
+}
