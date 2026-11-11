@@ -89,6 +89,8 @@ def test_docs_list_foundation_and_analytics_routes(client):
         "/api/sites/{slug}/status",
         "/api/sites/{slug}/report/latest",
         "/api/sites/{slug}/insights",
+        "/api/sites/{slug}/ahrefs",
+        "/api/sites/{slug}/ahrefs/web-analytics",
         *{
             f"/api/sites/{{slug}}/insights/{path}"
             for path in [
