@@ -187,3 +187,10 @@ def test_prompt_asks_for_concise_output():
     from app.insights.prompts import SYSTEM_PROMPT
 
     assert "concise" in SYSTEM_PROMPT.lower()
+
+
+def test_ground_checks_numbers_written_inside_text():
+    numbers = {"1240", "12"}
+    values = ["999999 impressions", "1,240 clicks", "12 -> 8", "−15%", "mobile only"]
+    result = ground([Evidence(metric="m", value=v, period="p") for v in values], numbers)
+    assert [item["grounded"] for item in result] == [False, True, False, False, True]

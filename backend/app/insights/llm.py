@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import time
 from datetime import UTC, datetime
 from typing import Literal, Protocol
 
@@ -16,6 +17,7 @@ from app.config import Settings
 from app.models import LlmUsage
 
 logger = logging.getLogger(__name__)
+_clock = time.monotonic
 
 ErrorCode = Literal["not_configured", "quota_exhausted", "unavailable", "invalid_output"]
 SAFE_MESSAGES: dict[str, str] = {
@@ -163,7 +165,16 @@ def generate_json[T: BaseModel](
         raise LlmError("not_configured")
     last: ErrorCode = "unavailable"
     budget = settings.llm_daily_request_budget
-    for model in [settings.llm_model, *settings.llm_fallback_models][:2]:
+    started = _clock()
+
+    def time_for_another_call() -> bool:
+        # Stay under the proxy/browser timeout: a late answer would be saved but never shown.
+        elapsed = _clock() - started
+        return elapsed + settings.llm_timeout_seconds <= settings.llm_deadline_seconds
+
+    for index, model in enumerate([settings.llm_model, *settings.llm_fallback_models][:2]):
+        if index and not time_for_another_call():
+            break
         _reserve(db, budget)
         conversation = list(messages)
         try:
@@ -181,7 +192,7 @@ def generate_json[T: BaseModel](
             try:
                 return _parse(content, schema), model
             except (ValueError, ValidationError) as error:
-                if attempt == 2:
+                if attempt == 2 or not time_for_another_call():
                     break
                 _reserve(db, budget)
                 conversation += [

@@ -90,7 +90,8 @@ export function InsightsPanel({
       await refresh();
     } catch (caught) {
       setError(message(caught));
-      void api.insightsStatus(slug).then(setUsage, () => undefined);
+      // A slow answer may still have been saved: reload history, insights and quota.
+      void refresh();
     } finally {
       setBusy(false);
     }

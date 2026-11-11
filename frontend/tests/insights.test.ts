@@ -87,6 +87,25 @@ describe("insights API", () => {
     expect(calls[0][1].method).toBe("POST");
     expect(JSON.parse(String(calls[0][1].body))).toEqual({ question: "Why?" });
   });
+  it("lists insights without a trailing slash (Next.js strips it)", async () => {
+    const paths: string[] = [];
+    const api = createApi(async (path) => {
+      paths.push(path);
+      return new Response("[]", { status: 200 });
+    });
+    await api.insights("s", { status: "new" });
+    expect(paths[0]).toBe("/api/sites/s/insights?status=new");
+  });
+  it("reports a timeout separately from an unreachable API", async () => {
+    const api = createApi(async () => {
+      throw new DOMException("timed out", "TimeoutError");
+    });
+    await expect(api.ask("s", { question: "Why?" })).rejects.toMatchObject({
+      status: 504,
+      message:
+        "This is taking longer than expected. The answer may still appear: reload in a minute.",
+    });
+  });
   it("patches an insight status", async () => {
     const calls: [string, RequestInit][] = [];
     const api = createApi(async (path, init) => {

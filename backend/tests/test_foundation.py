@@ -87,10 +87,10 @@ def test_docs_list_foundation_and_analytics_routes(client):
         "/api/sites/{slug}/ga4/pages",
         "/api/sites/{slug}/status",
         "/api/sites/{slug}/report/latest",
+        "/api/sites/{slug}/insights",
         *{
             f"/api/sites/{{slug}}/insights/{path}"
             for path in [
-                "",
                 "status",
                 "ask",
                 "weekly",

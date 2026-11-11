@@ -174,7 +174,7 @@ def ask_question(
     }
 
 
-@router.get("/", response_model=list[InsightOut])
+@router.get("", response_model=list[InsightOut])
 def list_insights(
     site: AccessibleSite,
     db: DbSession,

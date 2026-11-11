@@ -76,7 +76,7 @@ def test_status_reports_quota(client, login_as, fake):
 
 def test_viewer_can_read_but_not_ask(client, login_as, fake, data):
     login_as()
-    assert client.get(f"{BASE}/").status_code == 200
+    assert client.get(BASE).status_code == 200
     assert client.get(f"{BASE}/conversations").status_code == 200
     assert ask(client).status_code == 403
     assert fake.calls == []
@@ -100,7 +100,7 @@ def test_ask_returns_message_and_suggestions(client, login_as, fake, data):
     assert body["insights"][0]["evidence"][0]["grounded"] is True
     conversation = client.get(f"{BASE}/conversations/{body['conversation_id']}").json()
     assert [m["role"] for m in conversation["messages"]] == ["user", "assistant"]
-    listed = client.get(f"{BASE}/").json()
+    listed = client.get(BASE).json()
     assert [item["title"] for item in listed] == ["Low CTR"]
     assert response.headers["cache-control"] == "no-store"
 
@@ -141,7 +141,7 @@ def test_patch_status_validates_value(client, login_as, fake, data, db):
     assert client.patch(f"{BASE}/{insight_id}", json={"status": "bogus"}).status_code == 422
     response = client.patch(f"{BASE}/{insight_id}", json={"status": "accepted"})
     assert response.status_code == 200 and response.json()["status"] == "accepted"
-    assert client.get(f"{BASE}/", params={"status": "accepted"}).json()[0]["id"] == str(insight_id)
+    assert client.get(BASE, params={"status": "accepted"}).json()[0]["id"] == str(insight_id)
 
 
 def test_viewer_cannot_change_status(client, login_as, fake, data, db):
@@ -154,7 +154,7 @@ def test_viewer_cannot_change_status(client, login_as, fake, data, db):
 
 def test_insights_hidden_for_unlinked_site(client, login_as, fake):
     login_as()
-    response = client.get("/api/sites/site2/insights/")
+    response = client.get("/api/sites/site2/insights")
     assert response.status_code == 404
     assert response.json() == {"detail": "Site not found"}
 
@@ -177,3 +177,10 @@ def test_busy_models_return_502_not_429(client, login_as, fake, data):
     fake.replies = [TransportError(429, "rate-limited upstream")] * 2
     assert ask(client).status_code == 502
     assert client.get(f"{BASE}/status").json()["exhausted"] is False
+
+
+def test_list_route_has_no_trailing_slash(client, login_as, fake):
+    # Next.js strips trailing slashes before proxying; a redirect would leave the proxy.
+    login_as()
+    response = client.get(BASE, follow_redirects=False)
+    assert response.status_code == 200

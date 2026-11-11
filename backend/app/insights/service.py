@@ -36,13 +36,20 @@ def clean_question(text: str) -> str:
     return question
 
 
-def _number(value) -> Decimal | None:
+NUMBER = re.compile(r"[-−+]?\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers(value) -> list[Decimal]:
+    """Every figure in an evidence value, including ones written inside text."""
     if isinstance(value, bool):
-        return None
-    try:
-        return Decimal(str(value).replace(",", "").replace("%", "").strip())
-    except InvalidOperation:
-        return None
+        return []
+    found = []
+    for token in NUMBER.findall(str(value)):
+        try:
+            found.append(Decimal(token.replace("−", "-").replace(",", "")))
+        except InvalidOperation:
+            continue
+    return found
 
 
 def ground(evidence: list[Evidence], numbers: set[str]) -> list[dict]:
@@ -55,8 +62,8 @@ def ground(evidence: list[Evidence], numbers: set[str]) -> list[dict]:
             accepted.update(normalize_number(round(candidate, places)) for places in (0, 1, 2))
     result = []
     for item in evidence:
-        value = _number(item.value)
-        grounded = value is None or normalize_number(value) in accepted
+        # Text without figures is grounded; every figure in it must match the data.
+        grounded = all(normalize_number(abs(value)) in accepted for value in _numbers(item.value))
         result.append({**item.model_dump(), "grounded": grounded})
     return result
 

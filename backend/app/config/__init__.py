@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     llm_max_tokens: int = Field(default=8000, gt=0)
     llm_reasoning_effort: Literal["low", "medium", "high"] | None = "low"
     llm_timeout_seconds: float = Field(default=120, gt=0)
+    # Total time for one answer, retries and fallback included; below the 180 s proxy limit.
+    llm_deadline_seconds: float = Field(default=170, gt=0)
     llm_daily_request_budget: int = Field(default=45, ge=0)
 
     @field_validator("openrouter_api_key", "llm_reasoning_effort", mode="before")

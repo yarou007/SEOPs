@@ -173,3 +173,28 @@ def test_openrouter_client_sends_key_and_reads_content():
     with pytest.raises(TransportError) as capped:
         client.complete("capped", MESSAGES, 100)
     assert "free-models-per-day" in capped.value.detail
+
+
+def test_stops_before_overall_deadline(db, monkeypatch):
+    import app.insights.llm as llm
+
+    now = [0.0]
+    monkeypatch.setattr(llm, "_clock", lambda: now[0])
+
+    class SlowInvalid(FakeChatClient):
+        def complete(self, model, messages, max_tokens):
+            now[0] += 100
+            return super().complete(model, messages, max_tokens)
+
+    client = SlowInvalid(["not json", "not json", VALID, VALID])
+    with pytest.raises(LlmError) as error:
+        generate_json(
+            db,
+            client,
+            settings(llm_timeout_seconds=120, llm_deadline_seconds=170),
+            MESSAGES,
+            Reply,
+        )
+    assert error.value.code == "invalid_output"
+    assert len(client.calls) == 1
+    assert usage_today(db, settings()).used == 1

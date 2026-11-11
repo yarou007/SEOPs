@@ -81,7 +81,12 @@ export function createApi(transport: Transport = fetch) {
         credentials: "include",
         signal: AbortSignal.timeout(timeoutMs),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "TimeoutError")
+        throw new ApiError(
+          504,
+          "This is taking longer than expected. The answer may still appear: reload in a minute.",
+        );
       throw new ApiError(503, "Could not reach the API. Please try again.");
     }
     if (!response.ok) {
@@ -207,8 +212,7 @@ export function createApi(transport: Transport = fetch) {
     insights: (
       slug: string,
       filters: { status?: InsightStatus; source?: "weekly" | "chat" } = {},
-    ) =>
-      request<AiInsight[]>(`${sitePath(slug)}/insights/`, {}, { ...filters }),
+    ) => request<AiInsight[]>(`${sitePath(slug)}/insights`, {}, { ...filters }),
     updateInsight: (slug: string, id: string, status: InsightStatus) =>
       request<AiInsight>(
         `${sitePath(slug)}/insights/${encodeURIComponent(id)}`,
