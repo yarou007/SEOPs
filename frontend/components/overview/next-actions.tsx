@@ -38,7 +38,7 @@ export function NextActions({
           : "Appears after the first weekly report."
       }
     >
-      {!actions.length ? (
+      {!report ? null : !actions.length ? (
         <p className="text-sm text-muted">
           Nothing urgent in the latest weekly report.
         </p>

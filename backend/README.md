@@ -601,6 +601,21 @@ Migration `0006` adds `ai_conversations`, `ai_messages`, `ai_insights`, `llm_usa
 `weekly_reports.ai_summary`, and the site views `ai_insights` and `ai_conversations`. Tests
 use a fake client and never call the network.
 
+## Ahrefs and setup endpoints
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| POST | `/api/sites/{slug}/ahrefs/web-analytics` | creator or admin, origin check | `{period_start, period_end, files: [{name, content}]}` (content already decoded to text). Recognises each file by its header row; 422 with a message for a bad export. Same period replaces the earlier import. |
+| GET | `/api/sites/{slug}/ahrefs` | linked users | Latest Web Analytics import, the previous period, `changes`, `history`, and the last Backlinks / Site Audit uploads |
+| GET | `/api/sites/{slug}/connection/options` | creator or admin | Search Console and GA4 properties the service account can read (unfiltered), or a safe error per source |
+| POST | `/api/sites/{slug}/connection/test` | creator or admin, origin check | One tiny query per saved property: `{gsc: {ok, message}, ga4: {ok, message}}` |
+
+Code: `app/analysis/web_analytics.py` (parse, store, compare), `app/routers/ahrefs.py`,
+`app/google_admin.py`. Migration `0007` adds the typed `ahrefs_web_analytics` table and
+its per-site view. The AI context (`app/insights/context.py`) adds an
+`ahrefs_web_analytics` block read from that table: period, totals, top rows, the previous
+import, `changes` and `history`.
+
 ## Deferred work
 
 - Replace the four `TODO-site*.example` domains and set real display names,

@@ -1,6 +1,6 @@
 # SEOPs
 
-Client-facing SEO analytics platform. Clients connect their analytics sources and see them together on one dashboard. Sources so far: Google Search Console, Google Analytics 4, and Ahrefs CSV exports. Each site's data goes through a weekly analysis that flags pages and opportunities.
+Client-facing SEO analytics platform. Clients connect their analytics sources and see them together on one dashboard. Sources so far: Google Search Console, Google Analytics 4, and Ahrefs exports (Web Analytics, Backlinks, Site Audit). Each site's data goes through a weekly analysis that flags pages and opportunities.
 
 This project does not change the websites themselves.
 
@@ -11,7 +11,8 @@ This project does not change the websites themselves.
 - **Analysis axes:** eight protected views (see `docs/ANALYSIS_AXES.md`): impressions vs clicks, funnel, devices and OS, geography and zones, sitemaps, internal links, links between our sites, and search requests.
 - **Weekly analysis:** flags pages with high impressions and low CTR, mobile/desktop gaps, queries in positions 8–20, and clicks dropping, capped at three pages per site.
 - **AI insights:** ask questions about a website's data in plain English, get answers that cite the stored figures plus better follow-up questions, and generate an AI analysis for the weekly report. Every piece of advice is stored as a structured insight (see [AI insights](#ai-insights)).
-- **Dashboard:** login, site list, Overview, Search, Traffic, Analysis, Insights, Ahrefs, Data status, weekly report. Light and dark mode, phone and desktop layouts.
+- **Dashboard:** a sidebar with a website switcher and the sections Overview, Search, Traffic, Analysis, AI Insights, Ahrefs, Setup and Data status. Light and dark mode, phone (menu drawer) and desktop layouts. See [Using the dashboard](#using-the-dashboard).
+- **Ahrefs import:** upload the Ahrefs Web Analytics "all stats" export (a folder of files), Backlinks or Site Audit CSVs from the Ahrefs page. Every import is stored in the database and compared with the previous one.
 - **Website onboarding:** any signed-in user can add a website. Its creator and admins manage Google connections and start imports. Other linked users are read-only.
 
 ## Repository layout
@@ -42,8 +43,52 @@ Setup and commands:
 | `feat/analysis-axes` | Eight analysis axes, GSC totals fix, Analysis tab (PR #1 into `feat/real-data-sync`) |
 | `feat/unified-database` | One database organized by website: foreign keys, per-site schemas, reports and raw Ahrefs rows stored in PostgreSQL |
 | `feat/ai-insights` | AI chat, weekly AI analysis and stored insights over each site's data (built on `feat/unified-database`) |
+| `feat/ui-redesign` | New dashboard design, guided Setup, Ahrefs Web Analytics import and history (built on `feat/ai-insights`) |
 
 Work on a feature branch and open a pull request. Don't push straight to `main`.
+
+## Using the dashboard
+
+Sign in, then pick a website in the sidebar (or on **Your websites**).
+
+| Section | What it shows |
+|---|---|
+| **Overview** | One plain sentence on how clicks from Google changed, the four main numbers (clicks, times shown, click rate, average position) with an ⓘ explanation each, visits from GA4, a day-by-day chart, **What to do next** (actions built from the weekly report's flags), AI advice, and the full weekly report folded below. |
+| **Search** | Pages and searches from Search Console, sortable. |
+| **Traffic** | Visits per page from GA4. |
+| **Analysis** | Eight questions, each with a one-line answer; open the details for charts and tables. |
+| **AI Insights** | Ask questions in plain English; advice cards with filters (open, done, dismissed, priority). |
+| **Ahrefs** | Import Ahrefs exports and see visitors, phone clicks, pages, channels and devices, with the change since the previous import. |
+| **Setup** | Three steps: Search Console, GA4, Ahrefs. Each shows Connected, Needs action, Not set up or Not working. Pick the property from a list, **Test connection**, then **Sync now**. |
+| **Data status** | When each source was last copied into SEOPs. |
+
+Labels use plain words first and the technical name second (for example "Click rate", then CTR).
+
+### Connect a website (Setup)
+
+1. Copy the service-account email shown in step 1 and add it in Search Console
+   (Settings, Users and permissions). Do the same in GA4 (Admin, Property access
+   management, Viewer role).
+2. Choose the property from the list. SEOPs lists the properties the service account can
+   already read. The GA4 list needs the **Google Analytics Admin API** enabled in the
+   Google Cloud project; without it, type the numeric property ID by hand.
+3. Click **Save Google settings**, then **Test connection**, then **Sync now**.
+
+### Import Ahrefs data
+
+1. In Ahrefs, open **Web Analytics** for the website, choose the period (for example Last
+   30 days) and click **Export all data**. Unzip the download.
+2. In SEOPs, open **Ahrefs**, click **Choose folder** and pick the unzipped folder. The page
+   lists the recognised reports (top pages, entry and exit pages, channels, sources,
+   devices, countries, cities, events, outbound clicks and more) and fills in the period
+   from the folder name. Check the period, then **Import**.
+3. The data is saved in `ahrefs_web_analytics` (one row per item, with the period) and in
+   the website's `ahrefs_web_analytics` view. Import a new period every month to follow
+   the trend; importing the same period again replaces it. The AI uses the latest
+   import, the previous one and the changes between them.
+
+Backlinks and Site Audit CSVs are uploaded from the same page (tabs **Backlinks** and
+**Site Audit**). Ahrefs API access needs a paid Ahrefs plan, so SEOPs uses exports.
 
 ## Database
 
@@ -64,6 +109,7 @@ seops
     │   ├── gsc_index_status          URL inspection results
     │   ├── weekly_reports            weekly analysis (JSON + Markdown + AI summary)
     │   ├── ahrefs_csv_rows           every raw row of each uploaded Ahrefs CSV
+    │   ├── ahrefs_web_analytics      Ahrefs Web Analytics rows, typed, one per item and import period
     │   ├── ai_conversations, ai_messages   AI chat history
     │   ├── ai_insights               structured AI advice (problem, evidence, advice, KPI)
     │   └── llm_usage                 AI requests used per UTC day
@@ -71,7 +117,7 @@ seops
         └── Views: site_info, daily_totals, devices, countries, pages,
                    pages_by_device, queries, ga4_pages, snapshots, index_status,
                    weekly_reports, ahrefs_rows, sync_status,
-                   ai_insights, ai_conversations
+                   ai_insights, ai_conversations, ahrefs_web_analytics
 ```
 
 - **Linked by website.** Each data table's `site` column is a foreign key to
@@ -181,7 +227,8 @@ by the model provider. The data sent is aggregated SEO metrics, not credentials.
 
 ## Status
 
-- Verified with fixture data: 337 backend tests, 66 frontend unit tests, 3 browser tests.
+- Verified with fixture data: 371 backend tests, 98 frontend unit tests, 3 browser tests.
+- Redesign checked on 2026-11-11 in a browser (desktop and phone) on a copy of the real database: every section, the Setup property list and **Test connection** (Search Console and GA4 both answered for `dcemergencylockanddoor.com`), and an Ahrefs Web Analytics import of a real export (19 reports, 35 visitors, 3 phone clicks). Screenshots of the synthetic site are in `frontend/screenshots/redesign/`.
 - AI insights verified live on 2026-11-11 for `dcemergencylockanddoor.com`: one weekly analysis (5 insights) and one chat answer (5 insights), with every evidence value grounded.
 - Real data: the test site `dcemergencylockanddoor.com` is connected. For 22 Sep–19 Oct 2026, Google shows 4 clicks and 2,519 impressions, and the dashboard matches after the totals fix.
 - Not yet verified: the full 16-month backfill for that site, and the sitemap and GA4 operating-system collections.
@@ -191,7 +238,8 @@ by the model provider. The data sent is aggregated SEO metrics, not credentials.
 
 - Call-click event configured on each website (funnel's last step)
 - Zone list for the geography axis
-- Site Audit and backlink CSV exports (internal links and links between sites)
+- Site Audit and backlink CSV exports (internal links and links between sites), now uploaded from the Ahrefs page
+- Google Analytics Admin API enabled in the Google Cloud project, so Setup can list GA4 properties
 - Confirmed domains and property types for the five portfolio sites
 - Keyword provider for search volume and difficulty (CEO decision)
 
