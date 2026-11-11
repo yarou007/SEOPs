@@ -1,10 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Self
+from typing import Annotated, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -22,6 +22,27 @@ class Settings(BaseSettings):
     ga4_call_click_events: dict[str, str] = Field(default_factory=dict)
     portfolio_site_slugs: list[str] = Field(default_factory=list)
     reports_dir: Path = Path("reports")
+    openrouter_api_key: SecretStr | None = None
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    llm_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    llm_fallback_models: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["google/gemma-4-31b-it:free"]
+    )
+    llm_max_tokens: int = Field(default=4000, gt=0)
+    llm_timeout_seconds: float = Field(default=120, gt=0)
+    llm_daily_request_budget: int = Field(default=45, ge=0)
+
+    @field_validator("openrouter_api_key", mode="before")
+    @classmethod
+    def blank_key_is_unset(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("llm_fallback_models", mode="before")
+    @classmethod
+    def comma_separated_models(cls, value):
+        if isinstance(value, str):
+            return [model.strip() for model in value.split(",") if model.strip()]
+        return value
 
     @model_validator(mode="after")
     def default_ga4_credentials(self) -> Self:
