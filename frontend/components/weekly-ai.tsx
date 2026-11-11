@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Markdown } from "@/components/markdown";
 import { ApiError, api } from "@/lib/api";
 
@@ -19,17 +18,11 @@ export function WeeklyAi({
   const [error, setError] = useState("");
   return (
     <div className="space-y-3">
-      <h3 className="font-semibold">AI analysis</h3>
+      <h3 className="text-sm font-semibold">This week’s AI analysis</h3>
       {text ? (
-        <>
+        <div className="text-sm">
           <Markdown>{text}</Markdown>
-          <Link
-            className="text-sm text-accent hover:underline"
-            href={`/sites/${encodeURIComponent(slug)}?tab=insights`}
-          >
-            See all insights →
-          </Link>
-        </>
+        </div>
       ) : canManage ? (
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -55,7 +48,7 @@ export function WeeklyAi({
             {busy ? "Generating… (up to 2 minutes)" : "Generate AI analysis"}
           </button>
           <span className="text-xs text-muted">
-            Uses 1–2 of today’s AI requests.
+            Uses 1 to 4 of today’s AI requests.
           </span>
         </div>
       ) : (

@@ -24,6 +24,9 @@ import { Kpis } from "@/components/kpis";
 import { TimeseriesChart } from "@/components/timeseries-chart";
 import { StatusTable } from "@/components/status-table";
 import { WeeklyReport } from "@/components/weekly-report";
+import { Headline } from "@/components/overview/headline";
+import { NextActions } from "@/components/overview/next-actions";
+import { AiAdvice } from "@/components/overview/ai-advice";
 import { InsightsPanel } from "@/components/insights-panel";
 import { EmptyState, ErrorState } from "@/components/states";
 import { PageHeader } from "@/components/ui/page-header";
@@ -102,31 +105,45 @@ async function InsightsTab({
 
 async function Overview({ slug, summary }: { slug: string; summary: Summary }) {
   const api = await serverApi();
-  const [series, report, manage] = await Promise.all([
+  const [series, report, manage, insights] = await Promise.all([
     result(api.timeseries(slug, summary.current_window)),
     result(api.report(slug)),
     canManage(slug),
+    result(api.insights(slug)),
   ]);
+  const weekly = report.data ?? null;
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Overview</h2>
+      <Headline summary={summary} report={weekly} />
       <Kpis summary={summary} />
       {series.data ? (
         <TimeseriesChart rows={series.data} />
       ) : (
         <ErrorState message={series.error ?? "Could not load the chart."} />
       )}
-      {report.data ? (
-        <WeeklyReport report={report.data} slug={slug} canManage={manage} />
-      ) : report.status === 404 ? (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Weekly report</h2>
-          <EmptyState>No weekly report yet.</EmptyState>
-        </section>
-      ) : (
+      {!weekly && report.status !== 404 && (
         <ErrorState
           message={report.error ?? "Could not load the weekly report."}
         />
+      )}
+      <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+        <NextActions report={weekly} slug={slug} />
+        <AiAdvice
+          slug={slug}
+          canManage={manage}
+          summary={weekly?.ai_summary ?? null}
+          hasReport={!!weekly}
+          insights={insights.data ?? []}
+        />
+      </div>
+      {weekly ? (
+        <WeeklyReport report={weekly} />
+      ) : (
+        report.status === 404 && (
+          <EmptyState>
+            No weekly report yet. It is created after the first data sync.
+          </EmptyState>
+        )
       )}
     </div>
   );

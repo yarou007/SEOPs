@@ -5,15 +5,19 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { EmptyState } from "./states";
 
 const series = [
-  { key: "gsc_clicks", label: "GSC clicks", color: "var(--chart-clicks)" },
+  {
+    key: "gsc_clicks",
+    label: "Clicks from Google",
+    color: "var(--chart-clicks)",
+  },
   {
     key: "gsc_impressions",
-    label: "GSC impressions",
+    label: "Times shown on Google",
     color: "var(--chart-impressions)",
   },
   {
     key: "ga4_sessions",
-    label: "GA4 sessions",
+    label: "Visits (GA4)",
     color: "var(--chart-sessions)",
   },
 ] as const;
@@ -44,7 +48,7 @@ export function TimeseriesChart({ rows }: { rows: DayMetrics[] }) {
   const selected = rows[Math.min(index ?? rows.length - 1, rows.length - 1)];
   return (
     <section className="panel min-w-0 p-4 sm:p-5">
-      <h3 className="mb-4 font-semibold">Daily performance</h3>
+      <h2 className="mb-4 font-semibold">Day by day</h2>
       <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2 text-xs">
         {series.map((s) => (
           <span key={s.key} className="flex items-center gap-2">
