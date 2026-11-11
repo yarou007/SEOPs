@@ -13,6 +13,11 @@ def main(argv: list[str] | None = None) -> int:
     sites = weekly.add_mutually_exclusive_group(required=True)
     sites.add_argument("--site", metavar="SLUG")
     sites.add_argument("--all", action="store_true", help="Analyze all active sites")
+    weekly.add_argument(
+        "--with-ai",
+        action="store_true",
+        help="Also generate the AI analysis (uses the daily AI request budget)",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -51,6 +56,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             for warning in report["warnings"]:
                 logger.warning("%s: %s", site.slug, warning)
+            if args.with_ai:
+                from app.insights.llm import LlmError, OpenRouterClient
+                from app.insights.service import generate_weekly
+
+                try:
+                    with SessionLocal() as db:
+                        stored = generate_weekly(db, site, OpenRouterClient(settings), settings)
+                    logger.info("%s: AI analysis saved for %s", site.slug, stored.report_date)
+                except LlmError as error:
+                    logger.error("%s: AI analysis skipped: %s", site.slug, error.message)
+                    failed = True
         except Exception as exc:
             logger.error("%s: analysis failed: %s", site.slug, str(exc)[:500])
             failed = True

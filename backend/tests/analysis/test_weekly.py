@@ -374,3 +374,17 @@ def test_report_writer_rejects_slug_path_traversal(tmp_path):
         write_report(
             {"site": {"slug": "../escape"}, "report_date": "2026-10-19"}, tmp_path / "reports"
         )
+
+
+def test_cli_with_ai_without_key_keeps_report(db, site, tmp_path, monkeypatch):
+    import subprocess
+
+    from app.models import WeeklyReport
+
+    monkeypatch.setenv("REPORTS_DIR", str(tmp_path))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+    with pytest.raises(subprocess.CalledProcessError) as failure:
+        run_cli("app.analysis", "weekly", "--site", "arlington", "--with-ai")
+    assert "AI analysis skipped" in failure.value.stderr
+    assert "sk-" not in failure.value.stderr
+    assert db.query(WeeklyReport).count() == 1
