@@ -101,7 +101,7 @@ def render_context(context: dict, limit: int = 30_000) -> str:
     return rendered
 
 
-def _normalize(value) -> str:
+def normalize_number(value) -> str:
     text = format(Decimal(str(value)).quantize(Decimal("0.0001")), "f")
     return text.rstrip("0").rstrip(".") if "." in text else text
 
@@ -113,4 +113,4 @@ def context_numbers(context) -> set[str]:
         return set().union(*(context_numbers(item) for item in context))
     if isinstance(context, bool) or not isinstance(context, (int, float, Decimal)):
         return set()
-    return {_normalize(context)}
+    return {normalize_number(context)}

@@ -3,9 +3,9 @@ import threading
 
 import httpx
 import pytest
-from pydantic import BaseModel, SecretStr
+from insights_support import FakeChatClient, llm_settings
+from pydantic import BaseModel
 
-from app.config import get_settings
 from app.db import SessionLocal
 from app.insights.llm import (
     LlmError,
@@ -23,27 +23,7 @@ class Reply(BaseModel):
 VALID = json.dumps({"answer": "ok"})
 
 
-class FakeChatClient:
-    def __init__(self, replies):
-        self.replies = list(replies)
-        self.calls = []
-
-    def complete(self, model, messages, max_tokens):
-        self.calls.append((model, [dict(message) for message in messages]))
-        reply = self.replies.pop(0)
-        if isinstance(reply, Exception):
-            raise reply
-        return reply
-
-
-def settings(**update):
-    values = {
-        "openrouter_api_key": SecretStr("sk-test-key"),
-        "llm_model": "primary:free",
-        "llm_fallback_models": ["fallback:free"],
-        "llm_daily_request_budget": 45,
-    }
-    return get_settings().model_copy(update=values | update)
+settings = llm_settings
 
 
 MESSAGES = [{"role": "user", "content": "hi"}]
