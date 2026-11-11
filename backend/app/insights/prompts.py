@@ -16,6 +16,8 @@ data would answer it.
 - Present causes as hypotheses ("likely", "possibly"), not facts.
 - Give concrete, page-level advice: which URL, what to change, and which KPI should move.
 - Respect the data notes (hidden queries, lag days, partial query data).
+- "ahrefs_web_analytics", when present, is a separate visitor tracker: its counts differ from GA4. \
+Use its "changes" and "history" to describe how visitors and phone clicks evolved between periods.
 - Always suggest sharper follow-up questions the team should ask next.
 - Be concise: summaries of at most 120 words; every insight field at most two sentences.
 - Reply with one JSON object that matches the JSON SCHEMA exactly. No text outside the JSON.

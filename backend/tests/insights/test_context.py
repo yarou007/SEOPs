@@ -78,3 +78,56 @@ def test_context_numbers_normalizes():
         "12",
         "3",
     }
+
+
+def _import(db, start, end, direct, phone="3"):
+    from app.analysis.web_analytics import WebAnalyticsFile, import_web_analytics
+
+    def tsv(*rows):
+        return "\n".join("\t".join(f'"{c}"' for c in r) for r in rows) + "\n"
+
+    files = [
+        WebAnalyticsFile(
+            name="Channel.csv",
+            content=tsv(
+                ["Channel", "Visitors", "Bounce rate", "Visit duration"],
+                ["Direct", direct, "0.5", "239"],
+            ),
+        ),
+        WebAnalyticsFile(
+            name="TopPages.csv",
+            content=tsv(
+                ["Page", "Visitors", "Views", "Bounce rate", "Time on page"],
+                [f"https://{DOMAIN}/lock-repair", "9", "12", "0.25", "61"],
+            ),
+        ),
+        WebAnalyticsFile(
+            name="OutboundLinkClicks.csv",
+            content=tsv(["Event property: href", "Count", "Visitors"], ["tel:+1703", phone, "2"]),
+        ),
+    ]
+    import_web_analytics(db, site(db), start, end, files)
+    db.commit()
+
+
+def test_context_without_ahrefs_has_no_block(db, seeded):
+    assert "ahrefs_web_analytics" not in build_context(db, site(db), WINDOW)
+
+
+def test_context_has_ahrefs_block_with_evolution(db, seeded):
+    _import(db, date(2026, 9, 13), date(2026, 10, 12), "20", phone="1")
+    _import(db, date(2026, 10, 13), date(2026, 11, 11), "35")
+    block = build_context(db, site(db), WINDOW)["ahrefs_web_analytics"]
+    assert block["period"] == {"start": "2026-10-13", "end": "2026-11-11"}
+    assert block["totals"] == {"visitors": 35, "phone_clicks": 3, "pages": 1}
+    assert block["top_pages"][0]["item"] == f"https://{DOMAIN}/lock-repair"
+    assert block["top_pages"][0]["views"] == 12
+    assert block["channels"][0]["visitors"] == 35
+    assert block["previous"] == {
+        "period": {"start": "2026-09-13", "end": "2026-10-12"},
+        "totals": {"visitors": 20, "phone_clicks": 1, "pages": 1},
+    }
+    assert block["changes"]["visitors"]["change_percent"] == 75.0
+    assert [item["visitors"] for item in block["history"]] == [20, 35]
+    numbers = context_numbers(build_context(db, site(db), WINDOW))
+    assert {"35", "75", "12", "0.25"} <= numbers
