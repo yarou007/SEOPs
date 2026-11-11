@@ -265,12 +265,18 @@
   color: var(--accent);
   border-color: var(--accent);
 }
-.axis-index span,
-.axis-number {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--muted);
+@media (min-width: 1024px) {
+  .axis-index {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .axis-index a {
+    border-color: transparent;
+    background: transparent;
+    font-size: 13px;
+    padding: 7px 10px;
+  }
 }
 .axis-section {
   padding: 24px;

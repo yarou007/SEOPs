@@ -36,27 +36,32 @@ import { SECTIONS } from "@/lib/nav";
 
 const gscColumns = [
   { key: "clicks", label: "Clicks", kind: "number", sortable: true },
-  { key: "impressions", label: "Impressions", kind: "number", sortable: true },
-  { key: "ctr", label: "CTR", kind: "percent", sortable: true },
-  { key: "avg_position", label: "Position", kind: "position", sortable: true },
+  { key: "impressions", label: "Times shown", kind: "number", sortable: true },
+  { key: "ctr", label: "Click rate", kind: "percent", sortable: true },
+  {
+    key: "avg_position",
+    label: "Google position",
+    kind: "position",
+    sortable: true,
+  },
 ] as const;
 const pageColumns: Column<GscPage>[] = [
   { key: "page", label: "Page", kind: "text" },
   ...gscColumns,
 ];
 const queryColumns: Column<GscQuery>[] = [
-  { key: "query", label: "Query", kind: "text" },
+  { key: "query", label: "Search", kind: "text" },
   ...gscColumns,
-  { key: "top_page", label: "Top page", kind: "text" },
+  { key: "top_page", label: "Best page", kind: "text" },
 ];
 const trafficColumns: Column<Ga4Page>[] = [
   { key: "page_path", label: "Page path", kind: "text" },
-  { key: "sessions", label: "Sessions", kind: "number", sortable: true },
-  { key: "total_users", label: "Total users", kind: "number", sortable: true },
+  { key: "sessions", label: "Visits", kind: "number", sortable: true },
+  { key: "total_users", label: "Visitors", kind: "number", sortable: true },
   { key: "conversions", label: "Conversions", kind: "number", sortable: true },
   {
     key: "engagement_rate",
-    label: "Engagement rate",
+    label: "Engaged visits",
     kind: "percent",
     sortable: true,
   },
@@ -205,7 +210,9 @@ async function Search({
   return (
     <div className="space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold">Search performance</h2>
+        <p className="text-muted">
+          Which pages and searches bring people from Google. Sort any column.
+        </p>
         <DeviceFilter />
       </div>
       {pages.data ? (
@@ -235,8 +242,8 @@ async function Search({
         <ErrorState message={queries.error ?? "Could not load queries."} />
       )}
       <p className="text-xs text-muted">
-        Partial query data: Google hides some queries. Use query-free page
-        totals for pages and property totals for KPIs.
+        Google hides some rare searches for privacy, so the searches table adds
+        up to less than the page totals.
       </p>
     </div>
   );
@@ -263,10 +270,9 @@ async function Traffic({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold">Traffic performance</h2>
-        <p className="mt-1 text-sm text-muted">
-          Google Analytics 4 page metrics. User counts are summed daily/page
-          counts.
+        <p className="text-muted">
+          Visits to each page from Google Analytics 4. Visitors are counted per
+          day and page, so one person can count more than once.
         </p>
       </div>
       {rows.data ? (

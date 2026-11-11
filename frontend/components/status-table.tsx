@@ -6,12 +6,10 @@ import { SourceBadge } from "./source-badge";
 export function StatusTable({ status }: { status: SourceStatus }) {
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Data status</h2>
-        <p className="mt-1 text-sm text-muted">
-          Source sync progress. Dates more than 5 days old are marked stale.
-        </p>
-      </div>
+      <p className="text-muted">
+        When each source was last copied into SEOPs. Dates more than 5 days old
+        are marked stale; run a sync from Setup to refresh them.
+      </p>
       <div className="table-wrap">
         <table aria-label="Data status" className="min-w-[800px]">
           <thead>

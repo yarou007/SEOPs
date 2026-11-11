@@ -3,8 +3,10 @@ import { serverApi, result } from "@/lib/server-api";
 import { formatDate } from "@/lib/format";
 import { EmptyState, ErrorState } from "@/components/states";
 import { SourceBadge } from "@/components/source-badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { Plus } from "lucide-react";
 
-export const metadata = { title: "Sites" };
+export const metadata = { title: "Websites" };
 export default async function Sites() {
   const api = await serverApi();
   const list = await result(api.sites());
@@ -18,20 +20,19 @@ export default async function Sites() {
   );
   return (
     <div>
-      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
-          <p className="mt-1 text-muted">
-            {sites.length} accessible {sites.length === 1 ? "site" : "sites"}.
-            Select a site to review its performance.
-          </p>
-        </div>
-        <Link href="/sites/new" className="button button-primary">
-          Add website
-        </Link>
-      </div>
+      <PageHeader
+        title="Your websites"
+        description={`${sites.length} ${sites.length === 1 ? "website" : "websites"}. Open one to see how it is doing on Google.`}
+        actions={
+          <Link href="/sites/new" className="button button-primary">
+            <Plus size={16} aria-hidden /> Add website
+          </Link>
+        }
+      />
       {!sites.length ? (
-        <EmptyState>No sites are linked to your account.</EmptyState>
+        <EmptyState>
+          No websites yet. Add your first website to connect its Google data.
+        </EmptyState>
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {sites.map(({ site, status }) => (
@@ -72,7 +73,7 @@ export default async function Sites() {
                 )}
               </div>
               <p className="mt-6 border-t border-border pt-4 text-sm font-medium text-accent">
-                Open dashboard →
+                Open dashboard
               </p>
             </Link>
           ))}

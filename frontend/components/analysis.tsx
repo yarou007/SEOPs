@@ -36,7 +36,7 @@ import type {
   DataRow,
 } from "@/lib/analysis";
 import type { Result } from "@/lib/types";
-import { AxisUpload } from "./axis-upload";
+import Link from "next/link";
 
 const colors = {
   accent: "var(--chart-clicks)",
@@ -797,81 +797,98 @@ export function Analysis({
   canManage: boolean;
 }) {
   return (
-    <div className="analysis space-y-6">
-      <header>
-        <h2 className="text-xl font-semibold">Analysis</h2>
-        <p className="mt-1 text-muted">
-          Eight questions, with the evidence and its limits shown together.
-        </p>
-      </header>
-      <nav aria-label="Analysis axes" className="axis-index">
-        {axisDefinitions.map(([key, title], index) => (
+    <div className="analysis min-w-0 lg:grid lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-6">
+      <nav
+        aria-label="Analysis sections"
+        className="axis-index mb-6 lg:sticky lg:top-6 lg:mb-0 lg:flex lg:flex-col lg:self-start"
+      >
+        {axisDefinitions.map(([key, title]) => (
           <a key={key} href={`#axis-${key}`}>
-            <span>{String(index + 1).padStart(2, "0")}</span>
             {title}
           </a>
         ))}
       </nav>
-      {axisDefinitions.map(([key, title, question], index) => {
-        const result = axes[key],
-          response = result.data;
-        return (
-          <section
-            className="panel axis-section"
-            id={`axis-${key}`}
-            key={key}
-            aria-labelledby={`title-${key}`}
-            data-testid={`axis-${key}`}
-          >
-            <div className="axis-heading">
-              <div>
-                <p className="axis-number">
-                  AXIS {String(index + 1).padStart(2, "0")}
-                </p>
-                <h3 id={`title-${key}`}>{title}</h3>
+      <div className="min-w-0 space-y-6">
+        <p className="text-muted">
+          Eight questions about this website. Each one starts with the short
+          answer; open the details for charts and tables.
+        </p>
+        {axisDefinitions.map(([key, title, question], index) => {
+          const result = axes[key],
+            response = result.data;
+          return (
+            <section
+              className="panel axis-section"
+              id={`axis-${key}`}
+              key={key}
+              aria-labelledby={`title-${key}`}
+              data-testid={`axis-${key}`}
+            >
+              <div className="axis-heading">
+                <div>
+                  <h3 id={`title-${key}`}>{title}</h3>
+                  <p className="mt-1 text-sm text-muted">{question}</p>
+                </div>
+                <AxisStatusBadge
+                  status={response?.status ?? "needs_setup"}
+                  reason={response?.reason ?? result.error}
+                />
               </div>
-              <AxisStatusBadge
-                status={response?.status ?? "needs_setup"}
-                reason={response?.reason ?? result.error}
-              />
-            </div>
-            <p className="text-muted">{question}</p>
-            {response ? (
-              <>
-                <p className="axis-finding">
-                  {axisFinding(key, response.data)}
+              {response ? (
+                <>
+                  <p className="axis-finding">
+                    {axisFinding(key, response.data)}
+                  </p>
+                  <details className="group min-w-0" open={index === 0}>
+                    <summary className="cursor-pointer text-sm font-medium text-accent">
+                      <span className="group-open:hidden">
+                        Show charts and tables
+                      </span>
+                      <span className="hidden group-open:inline">
+                        Hide charts and tables
+                      </span>
+                    </summary>
+                    <div className="mt-4 flex min-w-0 flex-col gap-4">
+                      <AxisBody axis={key} data={response.data} />
+                      {response.reason && (
+                        <p className="axis-reason">{response.reason}</p>
+                      )}
+                      {response.data.scope && (
+                        <p className="text-xs text-muted">
+                          {response.data.scope}
+                        </p>
+                      )}
+                      {response.data.collected_at && (
+                        <p className="text-xs text-muted">
+                          Evidence collected: {response.data.collected_at}
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                </>
+              ) : (
+                <p role="alert" className="axis-empty">
+                  {result.error ??
+                    "Could not load this section. Reload to try again."}
                 </p>
-                <AxisBody axis={key} data={response.data} />
-                {response.reason && (
-                  <p className="axis-reason">{response.reason}</p>
-                )}
-                {response.data.scope && (
-                  <p className="text-xs text-muted">{response.data.scope}</p>
-                )}
-                {response.data.collected_at && (
-                  <p className="text-xs text-muted">
-                    Evidence collected: {response.data.collected_at}
+              )}
+              {canManage &&
+                (key === "internal-links" || key === "site-links") && (
+                  <p className="text-sm">
+                    <Link
+                      className="text-accent hover:underline"
+                      href={`/sites/${encodeURIComponent(slug)}?tab=ahrefs`}
+                    >
+                      Upload Ahrefs{" "}
+                      {key === "internal-links" ? "Site Audit" : "Backlinks"}{" "}
+                      exports on the Ahrefs page
+                    </Link>
                   </p>
                 )}
-              </>
-            ) : (
-              <p role="alert" className="axis-empty">
-                {result.error ??
-                  "Could not load this axis. Reload to try again."}
-              </p>
-            )}
-            {canManage &&
-              (key === "internal-links" || key === "site-links") && (
-                <AxisUpload
-                  slug={slug}
-                  kind={
-                    key === "internal-links" ? "internal-links" : "backlinks"
-                  }
-                />
-              )}
-          </section>
-        );
-      })}
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
