@@ -120,7 +120,7 @@ def test_ask_rejects_blank_question(client, login_as, fake, data):
 
 def test_quota_exhausted_returns_429(client, login_as, fake, data):
     login_as("admin")
-    fake.replies = [TransportError(429)]
+    fake.replies = [TransportError(429, "Rate limit exceeded: free-models-per-day")]
     response = ask(client)
     assert response.status_code == 429
     assert "limit" in response.json()["detail"]
@@ -170,3 +170,10 @@ def test_error_never_contains_key(client, login_as, fake, data):
     response = ask(client)
     assert response.status_code == 502
     assert "sk-" not in response.text
+
+
+def test_busy_models_return_502_not_429(client, login_as, fake, data):
+    login_as("admin")
+    fake.replies = [TransportError(429, "rate-limited upstream")] * 2
+    assert ask(client).status_code == 502
+    assert client.get(f"{BASE}/status").json()["exhausted"] is False

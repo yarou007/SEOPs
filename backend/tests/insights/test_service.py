@@ -170,3 +170,20 @@ def test_generate_weekly_without_report_raises(db, site):
     with pytest.raises(LookupError):
         generate_weekly(db, site, FakeChatClient([weekly_reply()]), llm_settings())
     assert db.scalar(select(func.count()).select_from(WeeklyReport)) == 0
+
+
+def test_weekly_reply_allows_at_most_five_insights():
+    from pydantic import ValidationError
+
+    from app.insights.prompts import WeeklyReply
+
+    payload = json.loads(weekly_reply())
+    payload["insights"] = [insight_json()] * 6
+    with pytest.raises(ValidationError):
+        WeeklyReply.model_validate(payload)
+
+
+def test_prompt_asks_for_concise_output():
+    from app.insights.prompts import SYSTEM_PROMPT
+
+    assert "concise" in SYSTEM_PROMPT.lower()

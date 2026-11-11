@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -24,15 +24,16 @@ class Settings(BaseSettings):
     reports_dir: Path = Path("reports")
     openrouter_api_key: SecretStr | None = None
     llm_base_url: str = "https://openrouter.ai/api/v1"
-    llm_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    llm_model: str = "nvidia/nemotron-3.5-super-vl:free"
     llm_fallback_models: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["google/gemma-4-31b-it:free"]
     )
-    llm_max_tokens: int = Field(default=4000, gt=0)
+    llm_max_tokens: int = Field(default=8000, gt=0)
+    llm_reasoning_effort: Literal["low", "medium", "high"] | None = "low"
     llm_timeout_seconds: float = Field(default=120, gt=0)
     llm_daily_request_budget: int = Field(default=45, ge=0)
 
-    @field_validator("openrouter_api_key", mode="before")
+    @field_validator("openrouter_api_key", "llm_reasoning_effort", mode="before")
     @classmethod
     def blank_key_is_unset(cls, value):
         return None if isinstance(value, str) and not value.strip() else value

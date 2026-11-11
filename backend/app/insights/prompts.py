@@ -17,6 +17,7 @@ data would answer it.
 - Give concrete, page-level advice: which URL, what to change, and which KPI should move.
 - Respect the data notes (hidden queries, lag days, partial query data).
 - Always suggest sharper follow-up questions the team should ask next.
+- Be concise: summaries of at most 120 words; every insight field at most two sentences.
 - Reply with one JSON object that matches the JSON SCHEMA exactly. No text outside the JSON.
 """
 
@@ -45,7 +46,7 @@ class ChatReply(BaseModel):
 
 class WeeklyReply(BaseModel):
     summary_markdown: str
-    insights: list[InsightDraft] = Field(min_length=1, max_length=8)
+    insights: list[InsightDraft] = Field(min_length=1, max_length=5)
     suggested_questions: list[str] = Field(min_length=3, max_length=3)
 
 
@@ -77,7 +78,7 @@ def weekly_messages(context_json: str, report: dict) -> list[dict]:
             context_json,
             WeeklyReply,
             "Write the weekly analysis: a short Markdown summary of what changed and why it "
-            "matters, then the 1-8 most valuable insights, highest priority first.",
+            "matters, then the 1-5 most valuable insights, highest priority first.",
         ),
         {
             "role": "user",

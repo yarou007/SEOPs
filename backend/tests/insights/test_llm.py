@@ -77,8 +77,11 @@ def test_always_invalid_raises_invalid_output(db):
     assert error.value.code == "invalid_output"
 
 
-def test_429_marks_quota_exhausted(db):
-    client = FakeChatClient([TransportError(429)])
+DAILY_CAP = TransportError(429, "Rate limit exceeded: free-models-per-day. Add credits.")
+
+
+def test_daily_cap_429_marks_quota_exhausted(db):
+    client = FakeChatClient([DAILY_CAP])
     with pytest.raises(LlmError) as error:
         generate_json(db, client, settings(), MESSAGES, Reply)
     assert error.value.code == "quota_exhausted"
@@ -87,6 +90,14 @@ def test_429_marks_quota_exhausted(db):
     with pytest.raises(LlmError):
         generate_json(db, later, settings(), MESSAGES, Reply)
     assert later.calls == []
+
+
+def test_upstream_429_falls_back_without_blocking_the_day(db):
+    busy = TransportError(429, "google/x:free is temporarily rate-limited upstream.")
+    client = FakeChatClient([busy, VALID])
+    _, model = generate_json(db, client, settings(), MESSAGES, Reply)
+    assert model == "fallback:free"
+    assert usage_today(db, settings()).exhausted is False
 
 
 def test_budget_exhausted_refuses_without_calling(db):
@@ -143,6 +154,10 @@ def test_openrouter_client_sends_key_and_reads_content():
         seen["body"] = json.loads(request.content)
         if seen["body"]["model"] == "broken":
             return httpx.Response(500, json={"error": "boom"})
+        if seen["body"]["model"] == "capped":
+            return httpx.Response(
+                429, json={"error": {"message": "Rate limit exceeded: free-models-per-day"}}
+            )
         return httpx.Response(200, json={"choices": [{"message": {"content": VALID}}]})
 
     client = OpenRouterClient(settings(), transport=httpx.MockTransport(handler))
@@ -150,7 +165,11 @@ def test_openrouter_client_sends_key_and_reads_content():
     assert seen["auth"] == "Bearer sk-test-key"
     assert seen["body"]["response_format"] == {"type": "json_object"}
     assert seen["body"]["max_tokens"] == 100
+    assert seen["body"]["reasoning"] == {"effort": "low"}
     with pytest.raises(TransportError) as error:
         client.complete("broken", MESSAGES, 100)
     assert error.value.status == 500
     assert "sk-test-key" not in str(error.value)
+    with pytest.raises(TransportError) as capped:
+        client.complete("capped", MESSAGES, 100)
+    assert "free-models-per-day" in capped.value.detail

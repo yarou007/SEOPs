@@ -34,9 +34,15 @@ class LlmError(Exception):
 
 
 class TransportError(Exception):
-    def __init__(self, status: int | None):
+    def __init__(self, status: int | None, detail: str = ""):
         super().__init__(f"LLM request failed (status {status})")
         self.status = status
+        # Provider error text (never contains our key); used to tell the daily cap apart.
+        self.detail = detail[:500]
+
+    @property
+    def daily_cap(self) -> bool:
+        return self.status == 429 and "per-day" in self.detail
 
 
 class ChatClient(Protocol):
@@ -46,6 +52,7 @@ class ChatClient(Protocol):
 class OpenRouterClient:
     def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None):
         key = settings.openrouter_api_key
+        self._reasoning = settings.llm_reasoning_effort
         self._client = httpx.Client(
             base_url=settings.llm_base_url,
             timeout=settings.llm_timeout_seconds,
@@ -57,20 +64,25 @@ class OpenRouterClient:
         )
 
     def complete(self, model: str, messages: list[dict], max_tokens: int) -> str | None:
+        body = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+        }
+        if self._reasoning:
+            # Free reasoning models otherwise spend the whole budget thinking.
+            body["reasoning"] = {"effort": self._reasoning}
         try:
-            response = self._client.post(
-                "/chat/completions",
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "response_format": {"type": "json_object"},
-                },
-            )
+            response = self._client.post("/chat/completions", json=body)
         except httpx.HTTPError:
             raise TransportError(None) from None
         if response.status_code >= 400:
-            raise TransportError(response.status_code)
+            try:
+                detail = str(response.json().get("error", {}).get("message", ""))
+            except (ValueError, AttributeError):
+                detail = ""
+            raise TransportError(response.status_code, detail)
         try:
             return response.json()["choices"][0]["message"].get("content")
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
@@ -157,9 +169,10 @@ def generate_json[T: BaseModel](
         try:
             content = client.complete(model, conversation, settings.llm_max_tokens)
         except TransportError as error:
-            if error.status == 429:
+            if error.daily_cap:
                 _record_failure(db, exhausted=True)
                 raise LlmError("quota_exhausted") from None
+            # Other 429s are a busy shared pool for one model: try the next model.
             logger.warning("LLM model %s failed with status %s", model, error.status)
             _record_failure(db)
             last = "unavailable"
@@ -182,7 +195,7 @@ def generate_json[T: BaseModel](
                 try:
                     content = client.complete(model, conversation, settings.llm_max_tokens)
                 except TransportError as transport_error:
-                    if transport_error.status == 429:
+                    if transport_error.daily_cap:
                         _record_failure(db, exhausted=True)
                         raise LlmError("quota_exhausted") from None
                     content = None
