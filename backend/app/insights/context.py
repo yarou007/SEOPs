@@ -7,8 +7,8 @@ from sqlalchemy import Numeric, cast, func, select
 from sqlalchemy.orm import Session
 
 from app import metrics
-from app.analysis.weekly import DATA_NOTES
 from app.analysis import web_analytics as wa
+from app.analysis.weekly import DATA_NOTES
 from app.models import AhrefsWebAnalytics, GscDaily, Site, WeeklyReport
 
 TOP_ROWS = 25
