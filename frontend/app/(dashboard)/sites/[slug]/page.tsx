@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { serverApi, result } from "@/lib/server-api";
 import { pageOffset, PAGE_SIZE } from "@/lib/params";
 import type {
+  DateRange,
   Device,
   Ga4Page,
   GscPage,
@@ -24,6 +25,7 @@ import { Kpis } from "@/components/kpis";
 import { TimeseriesChart } from "@/components/timeseries-chart";
 import { StatusTable } from "@/components/status-table";
 import { WeeklyReport } from "@/components/weekly-report";
+import { InsightsPanel } from "@/components/insights-panel";
 import { EmptyState, ErrorState } from "@/components/states";
 
 const tabs = [
@@ -31,6 +33,7 @@ const tabs = [
   ["search", "Search"],
   ["traffic", "Traffic"],
   ["analysis", "Analysis"],
+  ["insights", "Insights"],
   ["ahrefs", "Ahrefs"],
   ["status", "Data status"],
 ] as const;
@@ -66,11 +69,51 @@ function scalar(value: Query[string]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+async function canManage(slug: string): Promise<boolean> {
+  const api = await serverApi();
+  return (await result(api.connection(slug))).data?.can_manage ?? false;
+}
+
+async function InsightsTab({
+  slug,
+  range,
+}: {
+  slug: string;
+  range: DateRange;
+}) {
+  const api = await serverApi();
+  const [manage, usage, conversations, insights] = await Promise.all([
+    canManage(slug),
+    result(api.insightsStatus(slug)),
+    result(api.conversations(slug)),
+    result(api.insights(slug)),
+  ]);
+  if (!insights.data || !conversations.data)
+    return (
+      <ErrorState
+        message={
+          insights.error ?? conversations.error ?? "Could not load insights."
+        }
+      />
+    );
+  return (
+    <InsightsPanel
+      slug={slug}
+      canManage={manage}
+      range={range}
+      initialUsage={usage.data}
+      initialConversations={conversations.data}
+      initialInsights={insights.data}
+    />
+  );
+}
+
 async function Overview({ slug, summary }: { slug: string; summary: Summary }) {
   const api = await serverApi();
-  const [series, report] = await Promise.all([
+  const [series, report, manage] = await Promise.all([
     result(api.timeseries(slug, summary.current_window)),
     result(api.report(slug)),
+    canManage(slug),
   ]);
   return (
     <div className="space-y-6">
@@ -82,7 +125,7 @@ async function Overview({ slug, summary }: { slug: string; summary: Summary }) {
         <ErrorState message={series.error ?? "Could not load the chart."} />
       )}
       {report.data ? (
-        <WeeklyReport report={report.data} />
+        <WeeklyReport report={report.data} slug={slug} canManage={manage} />
       ) : report.status === 404 ? (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Weekly report</h2>
@@ -347,6 +390,8 @@ export default async function SitePage({
         <Traffic slug={slug} summary={selected.data} query={query} />
       ) : tab === "analysis" ? (
         <AnalysisTab slug={slug} summary={selected.data} />
+      ) : tab === "insights" ? (
+        <InsightsTab slug={slug} range={selected.data.current_window} />
       ) : tab === "ahrefs" ? (
         <section className="panel p-6">
           <h2 className="text-lg font-semibold">Ahrefs</h2>

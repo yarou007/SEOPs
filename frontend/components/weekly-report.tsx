@@ -1,3 +1,4 @@
+import { WeeklyAi } from "@/components/weekly-ai";
 import type { WeeklyReport as Report } from "@/lib/types";
 import {
   formatDate,
@@ -6,7 +7,15 @@ import {
   formatPosition,
 } from "@/lib/format";
 
-export function WeeklyReport({ report }: { report: Report }) {
+export function WeeklyReport({
+  report,
+  slug,
+  canManage = false,
+}: {
+  report: Report;
+  slug?: string;
+  canManage?: boolean;
+}) {
   return (
     <section className="panel space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -26,6 +35,13 @@ export function WeeklyReport({ report }: { report: Report }) {
             <li key={warning}>{warning}</li>
           ))}
         </ul>
+      )}
+      {slug && (
+        <WeeklyAi
+          slug={slug}
+          canManage={canManage}
+          summary={report.ai_summary ?? null}
+        />
       )}
       <div>
         <h3 className="font-semibold">Flagged pages</h3>
