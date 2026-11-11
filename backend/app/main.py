@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import LoginRateLimiter
 from app.config import get_settings
-from app.routers import analytics, auth, axes, sites
+from app.routers import analytics, auth, axes, insights, sites
 from app.site_sync import SyncJobs
 
 
@@ -15,13 +15,14 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=get_settings().allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["Content-Type"],
     )
     app.include_router(auth.router)
     app.include_router(sites.router)
     app.include_router(analytics.router)
     app.include_router(axes.router)
+    app.include_router(insights.router)
     return app
 
 
