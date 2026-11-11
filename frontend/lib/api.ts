@@ -1,5 +1,10 @@
 import type { AxisKey, AxisResponse } from "./analysis";
 import type {
+  AhrefsData,
+  ConnectionOptions,
+  ConnectionTestResult,
+  WebAnalyticsFile,
+  WebAnalyticsImport,
   DateRange,
   DayMetrics,
   Device,
@@ -208,6 +213,39 @@ export function createApi(transport: Transport = fetch) {
         },
         {},
         AI_TIMEOUT_MS,
+      ),
+    connectionOptions: (slug: string) =>
+      request<ConnectionOptions>(
+        `${sitePath(slug)}/connection/options`,
+        {},
+        {},
+        60_000,
+      ),
+    testConnection: (slug: string) =>
+      request<ConnectionTestResult>(
+        `${sitePath(slug)}/connection/test`,
+        { method: "POST" },
+        {},
+        90_000,
+      ),
+    ahrefs: (slug: string) => request<AhrefsData>(`${sitePath(slug)}/ahrefs`),
+    importWebAnalytics: (
+      slug: string,
+      body: {
+        period_start: string;
+        period_end: string;
+        files: WebAnalyticsFile[];
+      },
+    ) =>
+      request<WebAnalyticsImport>(
+        `${sitePath(slug)}/ahrefs/web-analytics`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        {},
+        60_000,
       ),
     insights: (
       slug: string,

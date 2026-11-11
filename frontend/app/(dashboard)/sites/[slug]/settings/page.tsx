@@ -1,39 +1,44 @@
-import Link from "next/link";
 import { serverApi, result } from "@/lib/server-api";
 import { SiteConnectionForm } from "@/components/site-connection";
 import { ErrorState } from "@/components/states";
+import { PageHeader } from "@/components/ui/page-header";
 
-export const metadata = { title: "Data connections" };
+export const metadata = { title: "Setup" };
 export default async function SiteSettings({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const connection = await result((await serverApi()).connection(slug), true);
+  const api = await serverApi();
+  const connection = await result(api.connection(slug), true);
   if (!connection.data)
     return (
       <ErrorState
-        message={connection.error ?? "Could not load website connections."}
+        message={connection.error ?? "Could not load this website’s settings."}
       />
     );
+  const [status, ahrefs] = await Promise.all([
+    result(api.status(slug)),
+    result(api.ahrefs(slug)),
+  ]);
   return (
-    <div className="mx-auto max-w-4xl space-y-7">
-      <div>
-        <Link
-          className="text-sm text-muted hover:text-accent"
-          href={`/sites/${encodeURIComponent(slug)}`}
-        >
-          ← Dashboard
-        </Link>
-        <h1 className="mt-4 text-2xl font-semibold tracking-tight">
-          Data connections
-        </h1>
-        <p className="mt-1 break-all text-muted">
-          {connection.data.display_name} · {connection.data.domain}
-        </p>
-      </div>
-      <SiteConnectionForm initial={connection.data} />
+    <div className="mx-auto max-w-4xl">
+      <PageHeader
+        title="Connect your data"
+        description={
+          <>
+            {connection.data.display_name}{" "}
+            <span className="break-all">({connection.data.domain})</span>.
+            Follow the steps in order; each one shows whether it is working.
+          </>
+        }
+      />
+      <SiteConnectionForm
+        initial={connection.data}
+        status={status.data}
+        ahrefs={ahrefs.data}
+      />
     </div>
   );
 }

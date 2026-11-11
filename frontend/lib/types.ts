@@ -198,3 +198,98 @@ export interface WeeklyAiResponse {
   ai_summary: string | null;
   insights: AiInsight[];
 }
+
+export interface ConnectionTest {
+  ok: boolean;
+  message: string;
+}
+export type ConnectionTestResult = Record<"gsc" | "ga4", ConnectionTest>;
+export interface Ga4PropertyOption {
+  id: string;
+  name: string;
+  account: string;
+}
+export interface ConnectionOptions {
+  gsc: { properties: string[]; error: string | null };
+  ga4: { properties: Ga4PropertyOption[]; error: string | null };
+}
+export type WebAnalyticsReport =
+  | "top_pages"
+  | "entry_pages"
+  | "exit_pages"
+  | "channels"
+  | "sources"
+  | "devices"
+  | "browsers"
+  | "os"
+  | "countries"
+  | "cities"
+  | "continents"
+  | "languages"
+  | "utm_campaign"
+  | "utm_content"
+  | "utm_medium"
+  | "utm_source"
+  | "utm_term"
+  | "events"
+  | "outbound_links";
+export interface WebAnalyticsRow {
+  page?: string;
+  href?: string;
+  name?: string;
+  visitors?: number;
+  views?: number;
+  entrances?: number;
+  exits?: number;
+  count?: number;
+  exit_rate?: number;
+  bounce_rate?: number;
+  visit_duration?: number;
+  time_on_page?: number;
+  conversion_rate?: number;
+}
+export interface WebAnalyticsTotals {
+  visitors: number;
+  phone_clicks: number;
+  pages: number;
+}
+export interface WebAnalyticsImport {
+  id: string;
+  period_start: string;
+  period_end: string;
+  imported_at: string;
+  totals: WebAnalyticsTotals;
+  reports: Partial<Record<WebAnalyticsReport, WebAnalyticsRow[]>>;
+  files: { recognised: number; empty: string[]; unknown: string[] };
+}
+export interface Change {
+  now: number | null;
+  before: number | null;
+  change_percent: number | null;
+}
+export interface AhrefsData {
+  web_analytics: WebAnalyticsImport | null;
+  previous: {
+    period_start: string;
+    period_end: string;
+    totals: WebAnalyticsTotals;
+  } | null;
+  changes: {
+    visitors?: Change;
+    phone_clicks?: Change;
+    bounce_rate?: Change;
+    pages?: { page: string; visitors_now: number; visitors_before: number }[];
+  };
+  history: {
+    period_start: string;
+    period_end: string;
+    visitors: number;
+    phone_clicks: number;
+  }[];
+  backlinks: { imported_at: string; rows: number } | null;
+  internal_links: { imported_at: string; rows: number } | null;
+}
+export interface WebAnalyticsFile {
+  name: string;
+  content: string;
+}
