@@ -48,8 +48,10 @@ google-api-python-client.
 ### Task 1: Ahrefs Web Analytics parser and import service
 
 **Files:**
-- Create: `backend/app/analysis/web_analytics.py`
-- Test: `backend/tests/analysis/test_web_analytics.py`
+- Create: `backend/app/analysis/web_analytics.py`, `backend/alembic/versions/0007_ahrefs_web_analytics.py`
+- Modify: `backend/app/models.py` (model `AhrefsWebAnalytics`), `backend/tests/conftest.py` (TRUNCATE list),
+  `backend/tests/test_foundation.py` (table list if enumerated)
+- Test: `backend/tests/analysis/test_web_analytics.py`, `backend/tests/test_unified_database.py`
 
 **Interfaces:**
 - Produces:
@@ -70,7 +72,20 @@ google-api-python-client.
     first (raw rows cascade).
   - `totals = {"visitors": sum(channels.visitors), "phone_clicks": sum(outbound_links.count where href
     starts with "tel:"), "pages": len(top_pages)}`.
-  - `latest_web_analytics(db, domain) -> AxisSnapshot | None` (newest `collected_at`).
+  - Typed table `ahrefs_web_analytics` (model `AhrefsWebAnalytics`): `id` identity PK, `snapshot_id` FK
+    axis_snapshots ON DELETE CASCADE, `site` `site_fk()`, `period_start`, `period_end` (date),
+    `report` text, `item` text, numeric nullable columns `visitors, views, entrances, exits` (int),
+    `exit_rate, bounce_rate, visit_duration, time_on_page, conversion_rate` (numeric), `count` (int),
+    `imported_at` timestamptz default now(); index (site, report, period_end). One row per parsed row.
+  - Migration 0007: create the table; add view `ahrefs_web_analytics` to each per-site schema by
+    rebuilding `_refresh_function(base, extra_views)` with 0006's AI views plus the new one (load 0005
+    and 0006 via importlib like 0006 does); downgrade restores 0006's function and drops the table.
+  - `latest_web_analytics(db, domain) -> AxisSnapshot | None` (newest `collected_at`) and
+    `previous_web_analytics(db, domain, before: AxisSnapshot) -> AxisSnapshot | None` (newest import whose
+    `end_date` < `before.start_date`, else newest other import with an earlier `end_date`).
+  - `compare_imports(latest: dict, previous: dict | None) -> dict` → `{"visitors": {"now", "before",
+    "change_percent"}, "phone_clicks": {...}, "bounce_rate": {...} (visitor-weighted from channels),
+    "pages": [{"page", "visitors_now", "visitors_before"}] (top 10 of latest)}`; `None` previous → `{}`.
 
 - [ ] **Step 1: Write failing tests** using fixture text copied from the example export (tab-separated,
   quoted; built in the test, not read from the ignored folder):
@@ -84,6 +99,10 @@ google-api-python-client.
   - `test_import_stores_snapshot_totals_and_raw_rows`: visitors 35 (26+8+1), phone_clicks 3, raw rows
     count equals parsed rows, kinds `web-analytics:channels` etc.
   - `test_reimport_same_period_replaces`: two imports, same dates → one snapshot; different dates → two.
+  - `test_typed_rows_stored`: `ahrefs_web_analytics` rows equal parsed rows; `"0.5625"` exit_rate stored.
+  - `test_compare_imports`: visitors 35 vs 20 → change 75.0; no previous → `{}`.
+  - In `test_unified_database.py`: the per-site schema exposes `ahrefs_web_analytics` with only that
+    site's rows; migration up/down/up keeps rows (follow the existing view tests).
 - [ ] **Step 2: Run** `.seops-local/pytest.sh -q tests/analysis/test_web_analytics.py` — Expected: FAIL
   (module missing).
 - [ ] **Step 3: Implement** with `csv.reader(delimiter="\t")`, header normalised with `_header` from
@@ -103,7 +122,9 @@ google-api-python-client.
   - `POST /api/sites/{slug}/ahrefs/web-analytics` body `{period_start: date, period_end: date, files:
     [WebAnalyticsFile] (1..40)}` → 201 `WebAnalyticsResponse`; 400 on `ValueError` with its message;
     422 when `period_end < period_start`; manager-only; origin check.
-  - `GET /api/sites/{slug}/ahrefs` → `{"web_analytics": WebAnalyticsResponse | null, "backlinks":
+  - `GET /api/sites/{slug}/ahrefs` → `{"web_analytics": WebAnalyticsResponse | null, "previous":
+    {period_start, period_end, totals} | null, "changes": compare_imports(...) , "history": [{period_start,
+    period_end, visitors, phone_clicks}] (all imports, oldest first), "backlinks":
     UploadInfo | null, "internal_links": UploadInfo | null}` where `WebAnalyticsResponse = {id,
     period_start, period_end, imported_at, totals, reports, files}` and `UploadInfo = {imported_at,
     rows}` (rows = count of `AhrefsCsvRow` for that snapshot).
@@ -156,10 +177,13 @@ google-api-python-client.
 **Interfaces:**
 - Consumes: Task 1 `latest_web_analytics`.
 - Produces: `context["ahrefs_web_analytics"] = {"period": {start, end}, "totals": {...}, "top_pages":
-  first 10, "channels", "sources": first 10, "devices", "events"}` or omitted when no import.
+  first 10, "channels", "sources": first 10, "devices", "events", "previous": {period, totals} | null,
+  "changes": compare_imports(...), "history": [...]}` built from the `ahrefs_web_analytics` table, or
+  omitted when no import.
   `render_context` trims it after `top_queries` if over the limit.
-- [ ] **Step 1: Failing tests:** block present with totals after an import; absent without; its numbers
-  appear in `context_numbers` (so they ground).
+- [ ] **Step 1: Failing tests:** block present with totals after an import; absent without; with two
+  imports of different periods, `previous` and `changes` hold the right numbers; its numbers appear in
+  `context_numbers` (so they ground).
 - [ ] **Step 2: Run** `.seops-local/pytest.sh -q tests/insights/test_context.py` — Expected: FAIL.
 - [ ] **Step 3: Implement.** Add one line to SYSTEM_PROMPT data notes: Ahrefs Web Analytics is a separate
   visitor tracker; its counts differ from GA4.
@@ -287,6 +311,8 @@ google-api-python-client.
   empty, U unknown", period inputs, Import button; Backlinks and Site Audit: existing `AxisUpload` with
   "How to export" steps), then the imported-data view (StatCards visitors, phone clicks, pages; tables
   for top pages, entry/exit pages, channels, sources, devices, countries, events with GLOSSARY labels).
+  A "Change since the previous import" strip (visitors, phone clicks, bounce rate with arrows and the two
+  periods named) and a small history chart of visitors per import when there are 2+ imports.
   Viewers see data, not the import controls.
 - [ ] **Step 4: Run** `npm test && npm run typecheck && npm run lint` — Expected: pass.
 - [ ] **Step 5: Commit** `feat(ui): Ahrefs page with Web Analytics import`.

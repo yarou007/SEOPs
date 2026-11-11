@@ -159,8 +159,19 @@ New backend endpoints (manager-only, same access rules as the connection endpoin
   `ahrefs_csv_rows` with `kind="web-analytics:<report>"` (no migration needed: `kind` is free text).
   `GET /api/sites/{slug}/ahrefs` returns the latest web-analytics snapshot plus the latest backlinks and
   internal-links snapshot metadata (collected_at, row counts).
+- **Stored in the database for analysis (owner's request).** Besides the snapshot and the raw rows, every
+  parsed row goes into a typed table `ahrefs_web_analytics` (one row per report item and import:
+  site, snapshot_id, period_start, period_end, report, item, visitors, views, entrances, exits,
+  exit_rate, bounce_rate, visit_duration, time_on_page, count, conversion_rate, imported_at), linked to
+  `sites.domain` like every other source table, and each per-site schema gets an `ahrefs_web_analytics`
+  view (migration 0007). Every import is kept (a different period adds history; the same period
+  replaces), so the evolution over time can be queried in SQL.
+- **Evolution.** The Ahrefs page compares the latest import with the previous one (earlier period):
+  change in visitors, phone clicks, bounce rate, and per top page.
 - The AI context (`build_context`) gains an `ahrefs_web_analytics` block (period, totals, top 10 pages,
-  channels, phone clicks) when an import exists, so AI answers can use it and its figures count as
+  channels, phone clicks) when an import exists, read from the `ahrefs_web_analytics` table, plus the
+  previous import's totals and the changes between the two, so the AI can describe the evolution. The
+  AI already compares GSC/GA4 current vs previous periods from the database; its figures count as
   grounded.
 
 ### 5. AI Insights
