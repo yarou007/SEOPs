@@ -93,3 +93,55 @@ describe("setup API calls", () => {
     ]);
   });
 });
+
+describe("pickerTyping", () => {
+  it("lets the user switch back to the list even when the saved value is not in it", async () => {
+    const { pickerTyping } = await import("../lib/setup");
+    expect(
+      pickerTyping({
+        manual: false,
+        loading: false,
+        listLength: 3,
+        valueKnown: false,
+        value: "x",
+      }),
+    ).toBe(true);
+    expect(
+      pickerTyping({
+        manual: false,
+        loading: false,
+        listLength: 3,
+        valueKnown: false,
+        value: "x",
+        chooseList: true,
+      }),
+    ).toBe(false);
+    expect(
+      pickerTyping({
+        manual: true,
+        loading: false,
+        listLength: 3,
+        valueKnown: true,
+        value: "x",
+      }),
+    ).toBe(true);
+    expect(
+      pickerTyping({
+        manual: false,
+        loading: false,
+        listLength: 0,
+        valueKnown: false,
+        value: "",
+      }),
+    ).toBe(true);
+    expect(
+      pickerTyping({
+        manual: false,
+        loading: true,
+        listLength: 0,
+        valueKnown: false,
+        value: "",
+      }),
+    ).toBe(false);
+  });
+});

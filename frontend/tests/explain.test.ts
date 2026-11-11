@@ -154,3 +154,14 @@ it("every glossary entry has a plain label, a technical name and help", () => {
   expect(GLOSSARY.ctr.label).toBe("Click rate");
   expect(GLOSSARY.position.higherIsBetter).toBe(false);
 });
+
+describe("comparisonLine", () => {
+  it("names both periods only when there is something to compare", async () => {
+    const { comparisonLine } = await import("../lib/explain");
+    expect(comparisonLine(summary(6, 12))).toBe(
+      "12 Oct 2026 – 08 Nov 2026, compared with 14 Sept 2026 – 11 Oct 2026.",
+    );
+    expect(comparisonLine(summary(6, null))).toBe("12 Oct 2026 – 08 Nov 2026.");
+    expect(comparisonLine(summary(null, 3))).toBe("12 Oct 2026 – 08 Nov 2026.");
+  });
+});

@@ -24,3 +24,26 @@ export function setupProgress(states: PillState[]): { done: number; total: 3 } {
     total: 3,
   };
 }
+
+/** Whether the property picker shows the text box (true) or the list (false). */
+export function pickerTyping({
+  manual,
+  chooseList = false,
+  loading,
+  listLength,
+  valueKnown,
+  value,
+}: {
+  manual: boolean;
+  chooseList?: boolean;
+  loading: boolean;
+  listLength: number;
+  valueKnown: boolean;
+  value: string;
+}): boolean {
+  if (manual) return true;
+  if (loading) return false;
+  if (!listLength) return true;
+  if (chooseList) return false;
+  return !!value && !valueKnown;
+}

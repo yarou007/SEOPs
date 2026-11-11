@@ -1,6 +1,5 @@
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
-import { headline } from "@/lib/explain";
-import { formatDate } from "@/lib/format";
+import { comparisonLine, headline } from "@/lib/explain";
 import type { Summary, WeeklyReport } from "@/lib/types";
 
 const TONE = {
@@ -43,12 +42,7 @@ export function Headline({
         <p className="max-w-[40ch] text-[1.45rem] font-semibold leading-snug tracking-[-0.015em] sm:text-[1.85rem]">
           {text}
         </p>
-        <p className="mt-2 text-sm text-muted">
-          {formatDate(summary.current_window.start)} –{" "}
-          {formatDate(summary.current_window.end)}, compared with{" "}
-          {formatDate(summary.previous_window.start)} –{" "}
-          {formatDate(summary.previous_window.end)}.
-        </p>
+        <p className="mt-2 text-sm text-muted">{comparisonLine(summary)}</p>
       </div>
     </section>
   );

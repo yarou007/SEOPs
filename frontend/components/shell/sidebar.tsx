@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -132,11 +132,26 @@ function Navigation({ sites, user }: { sites: Site[]; user: User }) {
 
 export function Sidebar({ sites, user }: { sites: Site[]; user: User }) {
   const [open, setOpen] = useState(false);
+  const drawer = useRef<HTMLElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  // Phone drawer: move focus in when it opens, close on Escape, give focus back on close.
+  useEffect(() => {
+    if (!open) return;
+    drawer.current?.querySelector<HTMLElement>("a, select, button")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      toggle.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
   return (
     <>
       <div className="sticky top-0 z-40 flex items-center justify-between bg-ink px-4 py-3 lg:hidden">
         <Brand />
         <button
+          ref={toggle}
           type="button"
           className="rounded-md p-2 text-ink-foreground"
           aria-label={open ? "Close menu" : "Open menu"}
@@ -155,13 +170,14 @@ export function Sidebar({ sites, user }: { sites: Site[]; user: User }) {
         />
       )}
       <aside
+        ref={drawer}
         id="sidebar"
         // Close the phone drawer once a link or the website switcher is used.
         onClick={(event) =>
           (event.target as HTMLElement).closest("a") && setOpen(false)
         }
         onChange={() => setOpen(false)}
-        className={`fixed inset-y-0 left-0 z-50 w-64 overflow-y-auto bg-ink transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 overflow-y-auto bg-ink transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${open ? "visible translate-x-0" : "invisible -translate-x-full lg:visible"}`}
       >
         <Navigation sites={sites} user={user} />
       </aside>

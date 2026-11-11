@@ -194,3 +194,13 @@ export function nextActions(
     });
   return actions.slice(0, limit);
 }
+
+/** The period line under the headline; names the earlier period only when it is compared. */
+export function comparisonLine(summary: Summary): string {
+  const current = `${formatDate(summary.current_window.start)} – ${formatDate(summary.current_window.end)}`;
+  const comparable =
+    summary.current.gsc?.clicks != null && !!summary.previous.gsc?.clicks;
+  return comparable
+    ? `${current}, compared with ${formatDate(summary.previous_window.start)} – ${formatDate(summary.previous_window.end)}.`
+    : `${current}.`;
+}

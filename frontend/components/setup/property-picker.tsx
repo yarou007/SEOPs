@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { pickerTyping } from "@/lib/setup";
 import type { Ga4PropertyOption } from "@/lib/types";
 
 /** Pick a property Google says SEOPs can read, or type it by hand. */
@@ -30,9 +31,15 @@ export function PropertyPicker({
         },
   );
   const known = list.some((item) => item.value === value);
-  const [manual, setManual] = useState(false);
-  const typing =
-    manual || (!loading && !list.length) || (!!value && !known && !loading);
+  const [mode, setMode] = useState<"auto" | "type" | "list">("auto");
+  const typing = pickerTyping({
+    manual: mode === "type",
+    chooseList: mode === "list",
+    loading,
+    listLength: list.length,
+    valueKnown: known,
+    value,
+  });
   const id = `${source}-property`;
   const label = source === "gsc" ? "Search Console property" : "GA4 property";
   return (
@@ -45,7 +52,7 @@ export function PropertyPicker({
           <button
             type="button"
             className="text-xs text-accent hover:underline"
-            onClick={() => setManual((current) => !current)}
+            onClick={() => setMode(typing ? "list" : "type")}
           >
             {typing ? "Choose from the list" : "Type it instead"}
           </button>
