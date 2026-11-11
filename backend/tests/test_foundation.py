@@ -88,6 +88,18 @@ def test_docs_list_foundation_and_analytics_routes(client):
         "/api/sites/{slug}/status",
         "/api/sites/{slug}/report/latest",
         *{
+            f"/api/sites/{{slug}}/insights/{path}"
+            for path in [
+                "",
+                "status",
+                "ask",
+                "weekly",
+                "conversations",
+                "conversations/{conversation_id}",
+                "{insight_id}",
+            ]
+        },
+        *{
             f"/api/sites/{{slug}}/axes/{axis}"
             for axis in [
                 "impressions-clicks",
