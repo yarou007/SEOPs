@@ -60,7 +60,7 @@ METRICS = [key for key, _ in COLUMNS.values()]
 
 class WebAnalyticsFile(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    content: str
+    content: str = Field(max_length=MAX_BYTES)
 
 
 def _item_key(report: str) -> str:
@@ -94,7 +94,14 @@ def parse_export(files: list[WebAnalyticsFile], site_domain: str) -> dict:
     empty: list[str] = []
     unknown: list[str] = []
     for file in files:
-        rows = list(csv.reader(io.StringIO(file.content.lstrip("﻿")), delimiter="\t"))
+        unreadable = f"{file.name}: could not be read as an Ahrefs tab-separated export"
+        if "\x00" in file.content:  # e.g. UTF-16 read as UTF-8; PostgreSQL rejects NUL
+            raise ValueError(unreadable)
+        try:
+            text = file.content.removeprefix("\N{ZERO WIDTH NO-BREAK SPACE}")
+            rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
+        except csv.Error:
+            raise ValueError(unreadable) from None
         rows = [row for row in rows if any(cell.strip() for cell in row)]
         if not rows:
             empty.append(file.name)

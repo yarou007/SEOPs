@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import LoginRateLimiter
+from app.body_limit import BodySizeLimit
 from app.config import get_settings
 from app.routers import ahrefs, analytics, auth, axes, insights, sites
 from app.site_sync import SyncJobs
@@ -18,6 +19,8 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["Content-Type"],
     )
+    # Added last so it runs first, before CORS, routing and body parsing.
+    app.add_middleware(BodySizeLimit)
     app.include_router(auth.router)
     app.include_router(sites.router)
     app.include_router(analytics.router)

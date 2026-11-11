@@ -126,3 +126,20 @@ def test_get_includes_backlinks_upload_info(client, login_as):
     assert data["backlinks"]["rows"] == 2
     assert data["backlinks"]["imported_at"]
     assert data["internal_links"] is None
+
+
+def test_oversized_body_is_refused_before_parsing(client):
+    huge = "x" * 7_000_000
+    response = client.post(
+        f"{BASE}/web-analytics",
+        content=huge,
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+
+
+def test_file_content_has_a_length_cap(client, login_as):
+    login_as("admin")
+    body = payload()
+    body["files"][0]["content"] = "x" * 2_000_001
+    assert client.post(f"{BASE}/web-analytics", json=body).status_code == 422

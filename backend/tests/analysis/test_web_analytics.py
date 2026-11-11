@@ -119,8 +119,9 @@ def test_rejects_bad_number():
 
 
 def test_rejects_over_2mb():
+    padding = "x" * 1_100_000
     with pytest.raises(ValueError, match="2 MB"):
-        parse_export(files(Channel=CHANNELS + "x" * 2_000_001), DOMAIN)
+        parse_export(files(Channel=CHANNELS + padding, Device=CHANNELS + padding), DOMAIN)
 
 
 def test_rejects_over_20000_rows():
@@ -215,3 +216,21 @@ def test_compare_imports():
         {"page": "/y", "visitors_now": 4, "visitors_before": 0},
     ]
     assert compare_imports(latest, None) == {}
+
+
+def test_unreadable_tsv_is_a_clear_error_not_a_crash():
+    broken = '"Channel"\t"Visitors"\t"Bounce rate"\t"Visit duration"\n"Direct\t' + "x" * 140_000
+    with pytest.raises(ValueError, match="could not be read"):
+        parse_export(files(Channel=broken), DOMAIN)
+
+
+def test_nul_characters_are_rejected():
+    bad = CHANNELS.replace("Direct", "Dir\x00ect")
+    with pytest.raises(ValueError, match="could not be read"):
+        parse_export(files(Channel=bad), DOMAIN)
+
+
+def test_bom_only_body_and_dot_rates():
+    parsed = parse_export(files(Possible404="﻿", Channel=CHANNELS), DOMAIN)
+    assert parsed["empty"] == ["Possible404.csv"]
+    assert [row["bounce_rate"] for row in parsed["reports"]["channels"]][2] == 0.0
